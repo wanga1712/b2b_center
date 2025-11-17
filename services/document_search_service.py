@@ -259,12 +259,80 @@ class DocumentSearchService:
         suffix = first_path.suffix.lower()
 
         if suffix in {".rar", ".zip", ".7z"}:
-            return self._extract_archive(first_path)
+            # Для многофайловых архивов сначала склеиваем части, затем распаковываем
+            archive_path = self._combine_multi_part_archive(downloaded_paths) if len(downloaded_paths) > 1 else first_path
+            return self._extract_archive(archive_path)
 
         if suffix in {".xlsx", ".xls"}:
             return first_path
 
         raise DocumentSearchError("Поддерживаются только XLSX файлы или архивы (RAR, ZIP, 7Z) с XLSX.")
+
+    def _combine_multi_part_archive(self, archive_paths: List[Path]) -> Path:
+        """
+        Склейка многофайлового архива в один файл.
+        
+        Для архивов, разбитых на части (part1.rar, part2.rar и т.д.),
+        склеивает все части в один файл перед распаковкой.
+        
+        Args:
+            archive_paths: Список путей к частям архива в правильном порядке
+            
+        Returns:
+            Путь к склеенному архиву
+        """
+        if len(archive_paths) == 1:
+            return archive_paths[0]
+        
+        logger.info(f"Обнаружен многофайловый архив из {len(archive_paths)} частей. Начинаю склейку...")
+        
+        # Определяем базовое имя и расширение
+        first_path = archive_paths[0]
+        base_name, _ = self._split_archive_name(first_path.name)
+        
+        if not base_name:
+            # Если не удалось определить базовое имя, используем имя первого файла без номера части
+            base_name = first_path.stem.rsplit('.part', 1)[0] if '.part' in first_path.stem.lower() else first_path.stem
+        
+        # Создаем имя для склеенного архива
+        suffix = first_path.suffix.lower()
+        combined_path = first_path.parent / f"{base_name}_combined{suffix}"
+        
+        # Склеиваем все части в один файл
+        try:
+            with open(combined_path, 'wb') as combined_file:
+                for part_path in sorted(archive_paths, key=lambda p: self._get_part_number(p)):
+                    logger.debug(f"Добавляю часть: {part_path.name}")
+                    with open(part_path, 'rb') as part_file:
+                        # Копируем данные по частям для экономии памяти
+                        while True:
+                            chunk = part_file.read(8192)
+                            if not chunk:
+                                break
+                            combined_file.write(chunk)
+            
+            logger.info(f"Многофайловый архив успешно склеен: {combined_path.name}")
+            return combined_path
+            
+        except Exception as error:
+            logger.error(f"Ошибка при склейке архива: {error}")
+            # Если склейка не удалась, пробуем использовать первую часть
+            logger.warning(f"Использую первую часть архива: {first_path.name}")
+            return first_path
+    
+    def _get_part_number(self, path: Path) -> int:
+        """Извлечение номера части из имени файла."""
+        match = self.ARCHIVE_PATTERN.match(path.name)
+        if match and match.group("part"):
+            return int(match.group("part"))
+        # Если номер части не найден, проверяем другие форматы
+        name_lower = path.name.lower()
+        if '.part' in name_lower:
+            # Пытаемся извлечь номер из формата .part01, .part1 и т.д.
+            part_match = re.search(r'\.part(\d+)', name_lower)
+            if part_match:
+                return int(part_match.group(1))
+        return 0  # Если номер не найден, считаем первой частью
 
     def _extract_archive(self, archive_path: Path) -> Path:
         """Распаковка архива (ZIP, RAR, 7Z) и поиск XLSX внутри."""
