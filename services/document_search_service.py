@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
 import uuid
@@ -255,18 +255,55 @@ class DocumentSearchService:
         if not downloaded_paths:
             raise DocumentSearchError("Не удалось скачать документ.")
 
-        first_path = downloaded_paths[0]
+        sorted_paths = sorted(downloaded_paths, key=self._archive_sort_key)
+        first_path = sorted_paths[0]
         suffix = first_path.suffix.lower()
 
         if suffix in {".rar", ".zip", ".7z"}:
             # Для многофайловых архивов сначала склеиваем части, затем распаковываем
-            archive_path = self._combine_multi_part_archive(downloaded_paths) if len(downloaded_paths) > 1 else first_path
+            archive_path = self._combine_multi_part_archive(sorted_paths) if len(sorted_paths) > 1 else first_path
             return self._extract_archive(archive_path)
 
         if suffix in {".xlsx", ".xls"}:
             return first_path
 
         raise DocumentSearchError("Поддерживаются только XLSX файлы или архивы (RAR, ZIP, 7Z) с XLSX.")
+
+    def debug_process_local_archives(self, archive_paths: List[Union[str, Path]]) -> Dict[str, Any]:
+        """
+        Тестовая обработка уже скачанных файлов (архивов или XLSX).
+
+        Позволяет быстро проверить распаковку и поиск без повторной загрузки.
+
+        Args:
+            archive_paths: Пути к локальным архивам или XLSX файлам
+
+        Returns:
+            Результат поиска: путь к файлу и найденные совпадения
+        """
+        if not archive_paths:
+            raise DocumentSearchError("Не переданы пути к локальным файлам.")
+
+        resolved_paths: List[Path] = []
+        for raw_path in archive_paths:
+            path_obj = Path(raw_path).expanduser().resolve()
+            if not path_obj.exists():
+                raise DocumentSearchError(f"Файл не найден: {path_obj}")
+            resolved_paths.append(path_obj)
+
+        logger.info(
+            "Запущен тестовый режим обработки локальных файлов: %s",
+            ", ".join(path.name for path in resolved_paths),
+        )
+
+        workbook_path = self._prepare_workbook_path(resolved_paths)
+        matches = self._search_workbook_for_products(workbook_path)
+
+        logger.info("Тестовая обработка завершена, найдено совпадений: %s", len(matches))
+        return {
+            "file_path": workbook_path,
+            "matches": matches,
+        }
 
     def _combine_multi_part_archive(self, archive_paths: List[Path]) -> Path:
         """
@@ -333,6 +370,12 @@ class DocumentSearchService:
             if part_match:
                 return int(part_match.group(1))
         return 0  # Если номер не найден, считаем первой частью
+
+    def _archive_sort_key(self, path: Path) -> Tuple[str, int]:
+        """Ключ сортировки для частей архивов."""
+        base_name, _ = self._split_archive_name(path.name)
+        base = base_name or path.stem.casefold()
+        return base, self._get_part_number(path)
 
     def _extract_archive(self, archive_path: Path) -> Path:
         """Распаковка архива (ZIP, RAR, 7Z) и поиск XLSX внутри."""
