@@ -1,0 +1,27 @@
+# Основные зависимости для B2B AutoDesk
+
+# GUI Framework
+PyQt5>=5.15.0
+# Альтернатива: PySide6>=6.0.0
+
+# База данных
+psycopg2-binary>=2.9.0
+
+# Конфигурация
+python-dotenv>=1.0.0
+
+# Логирование
+loguru>=0.7.0
+
+# Нечеткий поиск (fuzzy search) для обработки опечаток
+rapidfuzz>=3.0.0
+# Альтернатива (если rapidfuzz недоступен):
+# fuzzywuzzy>=0.18.0
+# python-Levenshtein>=0.12.0
+
+# Работа с документами
+requests>=2.32.0
+openpyxl>=3.1.2
+rarfile>=4.2
+py7zr>=0.21.0
+

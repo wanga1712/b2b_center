@@ -1,0 +1,32 @@
+"""
+Пользовательские исключения приложения
+"""
+
+class CommercialAppError(Exception):
+    """Базовое исключение приложения"""
+    pass
+
+class DatabaseConnectionError(CommercialAppError):
+    """Ошибка подключения к базе данных"""
+    pass
+
+class DatabaseQueryError(CommercialAppError):
+    """Ошибка выполнения запроса к базе данных"""
+    pass
+
+class ConfigurationError(CommercialAppError):
+    """Ошибка конфигурации приложения"""
+    pass
+
+class DeliveryCalculationError(CommercialAppError):
+    """Ошибка расчета доставки"""
+    pass
+
+class QuotationError(CommercialAppError):
+    """Ошибка работы с коммерческими предложениями"""
+    pass
+
+
+class DocumentSearchError(CommercialAppError):
+    """Ошибка поиска и обработки документации"""
+    pass

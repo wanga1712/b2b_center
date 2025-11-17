@@ -1,0 +1,1801 @@
+{
+  "database": "tender_monitor",
+  "analysis_date": "2025-11-12T17:19:21.002008",
+  "tables": [
+    {
+      "name": "auth_group",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "name",
+          "data_type": "character varying",
+          "character_maximum_length": 150,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        "auth_group_pkey",
+        "auth_group_name_key",
+        "auth_group_name_a6ea08ec_like"
+      ],
+      "row_count": 0,
+      "sample_data_count": 0
+    },
+    {
+      "name": "auth_group_permissions",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "bigint",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "group_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "permission_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "group_id",
+          "foreign_table_name": "auth_group",
+          "foreign_column_name": "id",
+          "constraint_name": "auth_group_permissions_group_id_b120cbf9_fk_auth_group_id"
+        },
+        {
+          "column_name": "permission_id",
+          "foreign_table_name": "auth_permission",
+          "foreign_column_name": "id",
+          "constraint_name": "auth_group_permissio_permission_id_84c5c92e_fk_auth_perm"
+        }
+      ],
+      "indexes": [
+        "auth_group_permissions_pkey",
+        "auth_group_permissions_group_id_permission_id_0cd325b0_uniq",
+        "auth_group_permissions_group_id_b120cbf9",
+        "auth_group_permissions_permission_id_84c5c92e"
+      ],
+      "row_count": 0,
+      "sample_data_count": 0
+    },
+    {
+      "name": "auth_permission",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "name",
+          "data_type": "character varying",
+          "character_maximum_length": 255,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "content_type_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        },
+        {
+          "column_name": "codename",
+          "data_type": "character varying",
+          "character_maximum_length": 100,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 4
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "content_type_id",
+          "foreign_table_name": "django_content_type",
+          "foreign_column_name": "id",
+          "constraint_name": "auth_permission_content_type_id_2f476e4b_fk_django_co"
+        }
+      ],
+      "indexes": [
+        "auth_permission_pkey",
+        "auth_permission_content_type_id_codename_01ab375a_uniq",
+        "auth_permission_content_type_id_2f476e4b"
+      ],
+      "row_count": 24,
+      "sample_data_count": 3
+    },
+    {
+      "name": "auth_user",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "password",
+          "data_type": "character varying",
+          "character_maximum_length": 128,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "last_login",
+          "data_type": "timestamp with time zone",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 3
+        },
+        {
+          "column_name": "is_superuser",
+          "data_type": "boolean",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 4
+        },
+        {
+          "column_name": "username",
+          "data_type": "character varying",
+          "character_maximum_length": 150,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 5
+        },
+        {
+          "column_name": "first_name",
+          "data_type": "character varying",
+          "character_maximum_length": 150,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 6
+        },
+        {
+          "column_name": "last_name",
+          "data_type": "character varying",
+          "character_maximum_length": 150,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 7
+        },
+        {
+          "column_name": "email",
+          "data_type": "character varying",
+          "character_maximum_length": 254,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 8
+        },
+        {
+          "column_name": "is_staff",
+          "data_type": "boolean",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 9
+        },
+        {
+          "column_name": "is_active",
+          "data_type": "boolean",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 10
+        },
+        {
+          "column_name": "date_joined",
+          "data_type": "timestamp with time zone",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 11
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        "auth_user_pkey",
+        "auth_user_username_key",
+        "auth_user_username_6821ab7c_like"
+      ],
+      "row_count": 0,
+      "sample_data_count": 0
+    },
+    {
+      "name": "auth_user_groups",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "bigint",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "user_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "group_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "user_id",
+          "foreign_table_name": "auth_user",
+          "foreign_column_name": "id",
+          "constraint_name": "auth_user_groups_user_id_6a12ed8b_fk_auth_user_id"
+        },
+        {
+          "column_name": "group_id",
+          "foreign_table_name": "auth_group",
+          "foreign_column_name": "id",
+          "constraint_name": "auth_user_groups_group_id_97559544_fk_auth_group_id"
+        }
+      ],
+      "indexes": [
+        "auth_user_groups_pkey",
+        "auth_user_groups_user_id_group_id_94350c0c_uniq",
+        "auth_user_groups_user_id_6a12ed8b",
+        "auth_user_groups_group_id_97559544"
+      ],
+      "row_count": 0,
+      "sample_data_count": 0
+    },
+    {
+      "name": "auth_user_user_permissions",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "bigint",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "user_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "permission_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "user_id",
+          "foreign_table_name": "auth_user",
+          "foreign_column_name": "id",
+          "constraint_name": "auth_user_user_permissions_user_id_a95ead1b_fk_auth_user_id"
+        },
+        {
+          "column_name": "permission_id",
+          "foreign_table_name": "auth_permission",
+          "foreign_column_name": "id",
+          "constraint_name": "auth_user_user_permi_permission_id_1fbb5f2c_fk_auth_perm"
+        }
+      ],
+      "indexes": [
+        "auth_user_user_permissions_pkey",
+        "auth_user_user_permissions_user_id_permission_id_14a6b632_uniq",
+        "auth_user_user_permissions_user_id_a95ead1b",
+        "auth_user_user_permissions_permission_id_1fbb5f2c"
+      ],
+      "row_count": 0,
+      "sample_data_count": 0
+    },
+    {
+      "name": "collection_codes_okpd",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('collection_codes_okpd_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "main_code",
+          "data_type": "character varying",
+          "character_maximum_length": 20,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "sub_code",
+          "data_type": "character varying",
+          "character_maximum_length": 20,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 3
+        },
+        {
+          "column_name": "parent_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 4
+        },
+        {
+          "column_name": "name",
+          "data_type": "character varying",
+          "character_maximum_length": 900,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 5
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "parent_id",
+          "foreign_table_name": "collection_codes_okpd",
+          "foreign_column_name": "id",
+          "constraint_name": "collection_codes_okpd_parent_id_fkey"
+        }
+      ],
+      "indexes": [
+        "collection_codes_okpd_pkey",
+        "unique_main_code",
+        "unique_sub_code",
+        "idx_collection_codes_okpd"
+      ],
+      "row_count": 2973,
+      "sample_data_count": 3
+    },
+    {
+      "name": "contractor",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('contractor_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "short_name",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "full_name",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        },
+        {
+          "column_name": "inn",
+          "data_type": "character varying",
+          "character_maximum_length": 12,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 4
+        },
+        {
+          "column_name": "kpp",
+          "data_type": "character varying",
+          "character_maximum_length": 9,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 5
+        },
+        {
+          "column_name": "legal_address",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 6
+        },
+        {
+          "column_name": "phone",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 8
+        },
+        {
+          "column_name": "email",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 9
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        "contractor_pkey",
+        "contractor_inn_key"
+      ],
+      "row_count": 39427,
+      "sample_data_count": 3
+    },
+    {
+      "name": "customer",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('customer_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "customer_short_name",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 3
+        },
+        {
+          "column_name": "customer_full_name",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 4
+        },
+        {
+          "column_name": "customer_inn",
+          "data_type": "character varying",
+          "character_maximum_length": 12,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 5
+        },
+        {
+          "column_name": "customer_kpp",
+          "data_type": "character varying",
+          "character_maximum_length": 9,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 6
+        },
+        {
+          "column_name": "customer_legal_address",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 7
+        },
+        {
+          "column_name": "customer_actual_address",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 8
+        },
+        {
+          "column_name": "contact_phone",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 9
+        },
+        {
+          "column_name": "contact_email",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 10
+        },
+        {
+          "column_name": "contact",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 11
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        "customer_pkey",
+        "customer_inn_key",
+        "idx_unique_contact",
+        "idx_unique_contact_phone",
+        "idx_unique_contact_email"
+      ],
+      "row_count": 29296,
+      "sample_data_count": 3
+    },
+    {
+      "name": "dates",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('dates_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "entry_date",
+          "data_type": "date",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "CURRENT_DATE",
+          "ordinal_position": 2
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        "dates_pkey"
+      ],
+      "row_count": 0,
+      "sample_data_count": 0
+    },
+    {
+      "name": "django_admin_log",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "action_time",
+          "data_type": "timestamp with time zone",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "object_id",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 3
+        },
+        {
+          "column_name": "object_repr",
+          "data_type": "character varying",
+          "character_maximum_length": 200,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 4
+        },
+        {
+          "column_name": "action_flag",
+          "data_type": "smallint",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 5
+        },
+        {
+          "column_name": "change_message",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 6
+        },
+        {
+          "column_name": "content_type_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 7
+        },
+        {
+          "column_name": "user_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 8
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "content_type_id",
+          "foreign_table_name": "django_content_type",
+          "foreign_column_name": "id",
+          "constraint_name": "django_admin_log_content_type_id_c4bce8eb_fk_django_co"
+        },
+        {
+          "column_name": "user_id",
+          "foreign_table_name": "auth_user",
+          "foreign_column_name": "id",
+          "constraint_name": "django_admin_log_user_id_c564eba6_fk_auth_user_id"
+        }
+      ],
+      "indexes": [
+        "django_admin_log_pkey",
+        "django_admin_log_content_type_id_c4bce8eb",
+        "django_admin_log_user_id_c564eba6"
+      ],
+      "row_count": 0,
+      "sample_data_count": 0
+    },
+    {
+      "name": "django_content_type",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "app_label",
+          "data_type": "character varying",
+          "character_maximum_length": 100,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        },
+        {
+          "column_name": "model",
+          "data_type": "character varying",
+          "character_maximum_length": 100,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 4
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        "django_content_type_pkey",
+        "django_content_type_app_label_model_76bd3d3b_uniq"
+      ],
+      "row_count": 6,
+      "sample_data_count": 3
+    },
+    {
+      "name": "django_migrations",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "bigint",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "app",
+          "data_type": "character varying",
+          "character_maximum_length": 255,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "name",
+          "data_type": "character varying",
+          "character_maximum_length": 255,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        },
+        {
+          "column_name": "applied",
+          "data_type": "timestamp with time zone",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 4
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        "django_migrations_pkey"
+      ],
+      "row_count": 18,
+      "sample_data_count": 3
+    },
+    {
+      "name": "django_session",
+      "columns": [
+        {
+          "column_name": "session_key",
+          "data_type": "character varying",
+          "character_maximum_length": 40,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "session_data",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "expire_date",
+          "data_type": "timestamp with time zone",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        }
+      ],
+      "primary_keys": [
+        "session_key"
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        "django_session_pkey",
+        "django_session_session_key_c0390e0f_like",
+        "django_session_expire_date_a5c62663"
+      ],
+      "row_count": 0,
+      "sample_data_count": 0
+    },
+    {
+      "name": "file_names_xml",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('file_names_xml_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "file_name",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        "file_names_xml_pkey"
+      ],
+      "row_count": 8526130,
+      "sample_data_count": 3
+    },
+    {
+      "name": "key_words_names",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('key_words_names_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "user_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "key_word",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "user_id",
+          "foreign_table_name": "users",
+          "foreign_column_name": "id",
+          "constraint_name": "key_words_names_user_id_fkey"
+        }
+      ],
+      "indexes": [
+        "key_words_names_pkey"
+      ],
+      "row_count": 0,
+      "sample_data_count": 0
+    },
+    {
+      "name": "key_words_names_documentations",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('key_words_names_documentations_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "user_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "key_word",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        },
+        {
+          "column_name": "setting_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 4
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "user_id",
+          "foreign_table_name": "users",
+          "foreign_column_name": "id",
+          "constraint_name": "key_words_names_documentations_user_id_fkey"
+        },
+        {
+          "column_name": "setting_id",
+          "foreign_table_name": "setting_options_from_users",
+          "foreign_column_name": "id",
+          "constraint_name": "fk_keywords_setting"
+        }
+      ],
+      "indexes": [
+        "key_words_names_documentations_pkey"
+      ],
+      "row_count": 0,
+      "sample_data_count": 0
+    },
+    {
+      "name": "links_documentation_223_fz",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('links_documentation_223_fz_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "contract_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "document_links",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        },
+        {
+          "column_name": "file_name",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 4
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "contract_id",
+          "foreign_table_name": "reestr_contract_223_fz",
+          "foreign_column_name": "id",
+          "constraint_name": "links_documentation_223_fz_contract_id_fkey"
+        },
+        {
+          "column_name": "contract_id",
+          "foreign_table_name": "reestr_contract_223_fz",
+          "foreign_column_name": "id",
+          "constraint_name": "fk_reestr_contract_id"
+        }
+      ],
+      "indexes": [
+        "links_documentation_223_fz_pkey"
+      ],
+      "row_count": 404300,
+      "sample_data_count": 3
+    },
+    {
+      "name": "links_documentation_44_fz",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('links_documentation_44_fz_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "contract_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "document_links",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        },
+        {
+          "column_name": "file_name",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 4
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "contract_id",
+          "foreign_table_name": "reestr_contract_44_fz",
+          "foreign_column_name": "id",
+          "constraint_name": "links_documentation_44_fz_contract_id_fkey"
+        }
+      ],
+      "indexes": [
+        "links_documentation_44_fz_pkey"
+      ],
+      "row_count": 3013217,
+      "sample_data_count": 3
+    },
+    {
+      "name": "okpd_from_users",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('okpd_from_users_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "user_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "okpd_code",
+          "data_type": "character varying",
+          "character_maximum_length": 255,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 5
+        },
+        {
+          "column_name": "name",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 6
+        },
+        {
+          "column_name": "setting_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 7
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "user_id",
+          "foreign_table_name": "users",
+          "foreign_column_name": "id",
+          "constraint_name": "okpd_from_users_user_id_fkey"
+        },
+        {
+          "column_name": "setting_id",
+          "foreign_table_name": "setting_options_from_users",
+          "foreign_column_name": "id",
+          "constraint_name": "fk_okpd_setting"
+        }
+      ],
+      "indexes": [
+        "okpd_from_users_pkey",
+        "unique_okpd_code"
+      ],
+      "row_count": 205,
+      "sample_data_count": 3
+    },
+    {
+      "name": "reestr_contract_223_fz",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('reestr_contract_223_fz_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "contract_number",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "tender_link",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        },
+        {
+          "column_name": "start_date",
+          "data_type": "date",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 4
+        },
+        {
+          "column_name": "end_date",
+          "data_type": "date",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 5
+        },
+        {
+          "column_name": "delivery_start_date",
+          "data_type": "date",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 6
+        },
+        {
+          "column_name": "delivery_end_date",
+          "data_type": "date",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 7
+        },
+        {
+          "column_name": "auction_name",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 8
+        },
+        {
+          "column_name": "initial_price",
+          "data_type": "numeric",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 9
+        },
+        {
+          "column_name": "final_price",
+          "data_type": "numeric",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 10
+        },
+        {
+          "column_name": "guarantee_amount",
+          "data_type": "numeric",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 11
+        },
+        {
+          "column_name": "customer_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 12
+        },
+        {
+          "column_name": "contractor_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 13
+        },
+        {
+          "column_name": "trading_platform_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 14
+        },
+        {
+          "column_name": "okpd_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 15
+        },
+        {
+          "column_name": "delivery_region",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 16
+        },
+        {
+          "column_name": "delivery_address",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 17
+        },
+        {
+          "column_name": "region_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 18
+        },
+        {
+          "column_name": "placer",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 19
+        },
+        {
+          "column_name": "placer_inn",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 20
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "customer_id",
+          "foreign_table_name": "customer",
+          "foreign_column_name": "id",
+          "constraint_name": "reestr_contract_223_fz_customer_id_fkey"
+        },
+        {
+          "column_name": "contractor_id",
+          "foreign_table_name": "contractor",
+          "foreign_column_name": "id",
+          "constraint_name": "reestr_contract_223_fz_contractor_id_fkey"
+        },
+        {
+          "column_name": "trading_platform_id",
+          "foreign_table_name": "trading_platform",
+          "foreign_column_name": "id",
+          "constraint_name": "reestr_contract_223_fz_trading_platform_id_fkey"
+        },
+        {
+          "column_name": "okpd_id",
+          "foreign_table_name": "collection_codes_okpd",
+          "foreign_column_name": "id",
+          "constraint_name": "reestr_contract_223_fz_okpd_id_fkey"
+        }
+      ],
+      "indexes": [
+        "reestr_contract_223_fz_pkey",
+        "idx_okpd_startdate_223fz"
+      ],
+      "row_count": 126643,
+      "sample_data_count": 3
+    },
+    {
+      "name": "reestr_contract_44_fz",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('reestr_contract_44_fz_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "contract_number",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "tender_link",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        },
+        {
+          "column_name": "start_date",
+          "data_type": "date",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 4
+        },
+        {
+          "column_name": "end_date",
+          "data_type": "date",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 5
+        },
+        {
+          "column_name": "delivery_start_date",
+          "data_type": "date",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 6
+        },
+        {
+          "column_name": "delivery_end_date",
+          "data_type": "date",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 7
+        },
+        {
+          "column_name": "auction_name",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 8
+        },
+        {
+          "column_name": "initial_price",
+          "data_type": "numeric",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 9
+        },
+        {
+          "column_name": "final_price",
+          "data_type": "numeric",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 10
+        },
+        {
+          "column_name": "guarantee_amount",
+          "data_type": "numeric",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 11
+        },
+        {
+          "column_name": "customer_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 12
+        },
+        {
+          "column_name": "contractor_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 13
+        },
+        {
+          "column_name": "trading_platform_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 14
+        },
+        {
+          "column_name": "okpd_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 15
+        },
+        {
+          "column_name": "customer",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 16
+        },
+        {
+          "column_name": "warranty_size",
+          "data_type": "numeric",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 17
+        },
+        {
+          "column_name": "delivery_region",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 18
+        },
+        {
+          "column_name": "delivery_address",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 19
+        },
+        {
+          "column_name": "region_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 20
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "customer_id",
+          "foreign_table_name": "customer",
+          "foreign_column_name": "id",
+          "constraint_name": "reestr_contract_44_fz_customer_id_fkey"
+        },
+        {
+          "column_name": "contractor_id",
+          "foreign_table_name": "contractor",
+          "foreign_column_name": "id",
+          "constraint_name": "reestr_contract_44_fz_contractor_id_fkey"
+        },
+        {
+          "column_name": "trading_platform_id",
+          "foreign_table_name": "trading_platform",
+          "foreign_column_name": "id",
+          "constraint_name": "reestr_contract_44_fz_trading_platform_id_fkey"
+        },
+        {
+          "column_name": "okpd_id",
+          "foreign_table_name": "collection_codes_okpd",
+          "foreign_column_name": "id",
+          "constraint_name": "reestr_contract_44_fz_okpd_id_fkey"
+        }
+      ],
+      "indexes": [
+        "reestr_contract_44_fz_pkey",
+        "idx_okpd_startdate"
+      ],
+      "row_count": 482245,
+      "sample_data_count": 3
+    },
+    {
+      "name": "region",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('region_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "code",
+          "data_type": "character varying",
+          "character_maximum_length": 2,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "name",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        "region_pkey",
+        "region_code_key"
+      ],
+      "row_count": 55,
+      "sample_data_count": 3
+    },
+    {
+      "name": "setting_options_from_users",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('setting_options_from_users_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "name",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        "setting_options_from_users_pkey"
+      ],
+      "row_count": 3,
+      "sample_data_count": 3
+    },
+    {
+      "name": "stop_words_names",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('stop_words_names_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "user_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "stop_word",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        },
+        {
+          "column_name": "setting_id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "YES",
+          "column_default": null,
+          "ordinal_position": 4
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column_name": "user_id",
+          "foreign_table_name": "users",
+          "foreign_column_name": "id",
+          "constraint_name": "stop_words_names_user_id_fkey"
+        },
+        {
+          "column_name": "setting_id",
+          "foreign_table_name": "setting_options_from_users",
+          "foreign_column_name": "id",
+          "constraint_name": "fk_stopwords_setting"
+        }
+      ],
+      "indexes": [
+        "stop_words_names_pkey",
+        "unique_user_filter"
+      ],
+      "row_count": 377,
+      "sample_data_count": 3
+    },
+    {
+      "name": "trading_platform",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('trading_platform_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "trading_platform_name",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "trading_platform_url",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        "trading_platform_pkey"
+      ],
+      "row_count": 81,
+      "sample_data_count": 3
+    },
+    {
+      "name": "users",
+      "columns": [
+        {
+          "column_name": "id",
+          "data_type": "integer",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "nextval('users_id_seq'::regclass)",
+          "ordinal_position": 1
+        },
+        {
+          "column_name": "email",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 2
+        },
+        {
+          "column_name": "phone",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 3
+        },
+        {
+          "column_name": "registration_date",
+          "data_type": "date",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "CURRENT_DATE",
+          "ordinal_position": 4
+        },
+        {
+          "column_name": "access_period",
+          "data_type": "interval",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 5
+        },
+        {
+          "column_name": "tariff",
+          "data_type": "text",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": null,
+          "ordinal_position": 6
+        },
+        {
+          "column_name": "paid",
+          "data_type": "boolean",
+          "character_maximum_length": null,
+          "is_nullable": "NO",
+          "column_default": "false",
+          "ordinal_position": 7
+        }
+      ],
+      "primary_keys": [
+        "id"
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        "users_pkey",
+        "users_email_key",
+        "users_phone_key"
+      ],
+      "row_count": 1,
+      "sample_data_count": 1
+    }
+  ]
+}
