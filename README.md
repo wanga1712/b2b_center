@@ -133,17 +133,16 @@ LOG_RETENTION=30 days
 # Локальные пути и инструменты
 # ============================================
 # Путь к директории для скачивания документов из ЕИС
-# По умолчанию используется:
-# C:\Users\wangr\YandexDisk\Обмен информацией\Отдел продаж\торги
-# DOCUMENT_DOWNLOAD_DIR=C:\Users\wangr\YandexDisk\Обмен информацией\Отдел продаж\торги
+# Пример: DOCUMENT_DOWNLOAD_DIR=C:\Projects\Documents\Tenders
 DOCUMENT_DOWNLOAD_DIR=
 
 # Путь к директории WinRAR (для распаковки архивов)
 # Пример: WINRAR_PATH=C:\Program Files\WinRAR
-WINRAR_PATH=C:\Program Files\WinRAR
+WINRAR_PATH=
 
 # Путь к инструменту UnRAR
-# По умолчанию используется C:\Program Files\WinRAR\UnRAR.exe
+# Пример: UNRAR_TOOL=C:\Program Files\WinRAR\UnRAR.exe
+# Если не указан, используется WINRAR_PATH\UnRAR.exe
 UNRAR_TOOL=
 ```
 

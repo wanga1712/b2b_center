@@ -37,7 +37,7 @@ from core.database import DatabaseManager
 
 # DOCUMENT_DOWNLOAD_DIR - путь к директории для скачивания документов из ЕИС
 # Настраивается через переменную окружения DOCUMENT_DOWNLOAD_DIR в .env файле
-# Пример: DOCUMENT_DOWNLOAD_DIR=C:\Users\wangr\YandexDisk\Файлы_из_ЕИС\Документация
+# Пример: DOCUMENT_DOWNLOAD_DIR=C:\Projects\Documents\Tenders
 
 
 class BidsWidget(QWidget):
