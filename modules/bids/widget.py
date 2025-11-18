@@ -22,7 +22,7 @@ import re
 # Импортируем единые стили
 from modules.styles.general_styles import (
     apply_label_style, apply_frame_style, apply_input_style, apply_button_style,
-    COLORS, FONT_SIZES, SIZES
+    COLORS, FONT_SIZES, SIZES, apply_text_style_light_italic
 )
 
 # Импортируем виджеты для торгов
@@ -76,6 +76,7 @@ class BidsWidget(QWidget):
                 self.product_db_manager,
                 download_dir,
                 unrar_path=config.unrar_tool,
+                winrar_path=config.winrar_path,
             )
             logger.info("Сервис поиска по документации инициализирован")
         else:
@@ -175,7 +176,7 @@ class BidsWidget(QWidget):
         
         in_work_info = QLabel("Раздел торгов в работе будет реализован позже")
         apply_label_style(in_work_info, 'normal')
-        in_work_info.setStyleSheet(f"color: {COLORS['text_light']}; font-style: italic;")
+        apply_text_style_light_italic(in_work_info)
         in_work_layout.addWidget(in_work_info)
         in_work_layout.addStretch()
         
@@ -441,7 +442,7 @@ class BidsWidget(QWidget):
         
         stop_words_info = QLabel("Стоп-слова используются для фильтрации торгов. Торги, содержащие стоп-слова, будут исключены из результатов.")
         apply_label_style(stop_words_info, 'small')
-        stop_words_info.setStyleSheet(f"color: {COLORS['text_light']}; font-style: italic;")
+        apply_text_style_light_italic(stop_words_info)
         stop_words_info.setWordWrap(True)
         stop_words_layout.addWidget(stop_words_info)
         
@@ -635,7 +636,7 @@ class BidsWidget(QWidget):
         if not user_okpd:
             no_data_label = QLabel("Нет добавленных кодов ОКПД")
             apply_label_style(no_data_label, 'normal')
-            no_data_label.setStyleSheet(f"color: {COLORS['text_light']}; font-style: italic;")
+            apply_text_style_light_italic(no_data_label)
             self.added_okpd_layout.addWidget(no_data_label)
             return
         
@@ -776,7 +777,7 @@ class BidsWidget(QWidget):
         if not user_stop_words:
             no_data_label = QLabel("Нет добавленных стоп-слов")
             apply_label_style(no_data_label, 'normal')
-            no_data_label.setStyleSheet(f"color: {COLORS['text_light']}; font-style: italic;")
+            apply_text_style_light_italic(no_data_label)
             self.stop_words_layout.addWidget(no_data_label)
             return
         

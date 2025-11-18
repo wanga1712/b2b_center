@@ -336,6 +336,52 @@ def apply_topbar_style(widget):
 def apply_table_style(widget):
     widget.setStyleSheet(TABLE_STYLES['default'])
 
+# Вспомогательные функции для часто используемых стилей (DRY принцип)
+def apply_text_color(widget, color_type='text_light'):
+    """
+    Применение цвета текста к виджету.
+    
+    Args:
+        widget: Виджет (QLabel, QPushButton и т.д.)
+        color_type: Тип цвета ('text_light', 'text_dark', 'primary', 'error', 'success', 'warning')
+    """
+    color = COLORS.get(color_type, COLORS['text_light'])
+    current_style = widget.styleSheet() or ""
+    widget.setStyleSheet(f"{current_style} color: {color};")
+
+def apply_font_weight(widget, weight='600'):
+    """
+    Применение жирности шрифта к виджету.
+    
+    Args:
+        widget: Виджет
+        weight: Вес шрифта ('600', 'bold', 'normal')
+    """
+    current_style = widget.styleSheet() or ""
+    widget.setStyleSheet(f"{current_style} font-weight: {weight};")
+
+def apply_text_style_light(widget):
+    """Быстрое применение стиля светлого текста."""
+    apply_text_color(widget, 'text_light')
+
+def apply_text_style_dark(widget):
+    """Быстрое применение стиля темного текста."""
+    apply_text_color(widget, 'text_dark')
+
+def apply_text_style_primary(widget):
+    """Быстрое применение стиля основного цвета."""
+    apply_text_color(widget, 'primary')
+
+def apply_text_style_light_italic(widget):
+    """
+    Применение стиля светлого текста с курсивом (для информационных сообщений).
+    
+    Args:
+        widget: Виджет
+    """
+    current_style = widget.styleSheet() or ""
+    widget.setStyleSheet(f"{current_style} color: {COLORS['text_light']}; font-style: italic;")
+
 # Функция для получения информации о масштабировании
 def get_scaling_info():
     return {

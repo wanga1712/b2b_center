@@ -20,9 +20,9 @@ class AIChatDialog(QDialog):
     def __init__(self, task_type, parent=None):
         super().__init__(parent)
         self.task_type = task_type
-        self.setWindowTitle(f"AI Ассистент - {task_type}")
+        from modules.styles.ui_config import configure_dialog
+        configure_dialog(self, f"AI Ассистент - {task_type}", size_preset="ai_chat")
         self.setModal(True)
-        self.resize(700, 600)
         self.init_ui()
 
     def init_ui(self):

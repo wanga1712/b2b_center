@@ -24,7 +24,8 @@ from loguru import logger
 # Импортируем единые стили
 from modules.styles.general_styles import (
     apply_button_style, apply_input_style, apply_label_style,
-    apply_combobox_style, apply_frame_style, COLORS, FONT_SIZES, SIZES
+    apply_combobox_style, apply_frame_style, COLORS, FONT_SIZES, SIZES,
+    apply_text_style_light_italic
 )
 from modules.styles.table_styles import (
     get_table_button_style, get_table_cell_widget_container_style
@@ -502,7 +503,7 @@ class KPWidget(QWidget):
         
         self.kp_validity_lbl = QLabel(f"Действует до {valid_until_str} (5 рабочих дней от {format_date_for_display(current_date)})")
         apply_label_style(self.kp_validity_lbl, 'normal')
-        self.kp_validity_lbl.setStyleSheet(f"color: {COLORS['text_light']}; font-style: italic;")
+        apply_text_style_light_italic(self.kp_validity_lbl)
         conditions_grid.addWidget(self.kp_validity_lbl, 0, 1)
 
         # Условия оплаты (по умолчанию)

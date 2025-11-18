@@ -30,6 +30,7 @@ def _build_document_service(download_dir: Path) -> DocumentSearchService:
             db_manager,
             download_dir,
             unrar_path=config.unrar_tool,
+            winrar_path=config.winrar_path,
         )
     except Exception:
         db_manager.close()

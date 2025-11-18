@@ -10,6 +10,7 @@ from PyQt5.QtCore import Qt
 from modules.styles.general_styles import (
     apply_label_style, apply_input_style, apply_button_style, COLORS
 )
+from modules.styles.ui_config import configure_dialog
 
 
 class NameEditDialog(QDialog):
@@ -24,8 +25,7 @@ class NameEditDialog(QDialog):
             parent: Родительский виджет
         """
         super().__init__(parent)
-        self.setWindowTitle("Редактирование наименования товара")
-        self.setMinimumWidth(400)
+        configure_dialog(self, "Редактирование наименования товара", size_preset="small", min_width=400)
         
         layout = QVBoxLayout(self)
         layout.setSpacing(15)

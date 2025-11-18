@@ -28,7 +28,15 @@ from config.settings import config
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("🚀 B2B AutoDesk — автоматизация бизнес-процессов")
+        from modules.styles.ui_config import configure_window
+        from PyQt5.QtWidgets import QApplication
+        
+        configure_window(self, "🚀 B2B AutoDesk — автоматизация бизнес-процессов")
+        
+        # Настройка размера окна под экран пользователя
+        screen = QApplication.primaryScreen()
+        size = screen.availableGeometry()
+        self.resize(int(size.width() * 1), int(size.height() * 0.97))
         
         # Флаг для отслеживания первого показа окна
         self._first_show = True

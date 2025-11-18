@@ -19,6 +19,11 @@ class FakeDBManager:
         return [{"name": name} for name in self._names]
 
 
+class DummyCleanupManager:
+    def cleanup(self, *args, **kwargs):
+        pass
+
+
 class DocumentSearchServiceTestCase(unittest.TestCase):
     """Тесты сервиса поиска по документации."""
 
@@ -26,7 +31,12 @@ class DocumentSearchServiceTestCase(unittest.TestCase):
         self.temp_dir = TemporaryDirectory()
         self.download_dir = Path(self.temp_dir.name) / "downloads"
         self.db_manager = FakeDBManager(["iPhone 14", "Samsung Galaxy"])
-        self.service = DocumentSearchService(self.db_manager, self.download_dir)
+        self.cleanup_manager = DummyCleanupManager()
+        self.service = DocumentSearchService(
+            self.db_manager,
+            self.download_dir,
+            cleanup_manager=self.cleanup_manager,
+        )
 
     def tearDown(self):
         self.temp_dir.cleanup()
@@ -46,8 +56,8 @@ class DocumentSearchServiceTestCase(unittest.TestCase):
         documents = [{"file_name": "16. Смета Проходная АР.xlsx", "document_links": "http://example.com/doc.xlsx"}]
 
         with patch.object(DocumentSearchService, "_download_required_documents", return_value=[sample_file]), \
-                patch.object(DocumentSearchService, "_prepare_workbook_path", return_value=sample_file):
-            result = self.service.run_document_search(documents)
+                patch.object(DocumentSearchService, "_prepare_workbook_paths", return_value=[sample_file]):
+            result = self.service.run_document_search(documents, tender_id=1)
 
         self.assertIn("file_path", result)
         self.assertTrue(result["matches"])
@@ -58,7 +68,7 @@ class DocumentSearchServiceTestCase(unittest.TestCase):
         """Если нет документа со словом 'смета', выбрасывается исключение."""
         documents = [{"file_name": "Протокол заседания.xlsx", "document_links": "http://example.com/doc.xlsx"}]
         with self.assertRaises(DocumentSearchError):
-            self.service.run_document_search(documents)
+            self.service.run_document_search(documents, tender_id=1)
 
     def test_run_document_search_accepts_smetnaya(self):
         """Документы со словом 'сметная' также должны находиться."""
@@ -66,8 +76,8 @@ class DocumentSearchServiceTestCase(unittest.TestCase):
         documents = [{"file_name": "Сметная_документация.part01.rar", "document_links": "http://example.com/doc.part1"}]
 
         with patch.object(DocumentSearchService, "_download_required_documents", return_value=[sample_file]), \
-                patch.object(DocumentSearchService, "_prepare_workbook_path", return_value=sample_file):
-            result = self.service.run_document_search(documents)
+                patch.object(DocumentSearchService, "_prepare_workbook_paths", return_value=[sample_file]):
+            result = self.service.run_document_search(documents, tender_id=1)
 
         self.assertTrue(result["matches"])
 
@@ -77,7 +87,7 @@ class DocumentSearchServiceTestCase(unittest.TestCase):
             {"file_name": f"Сметная_документация.part{str(i).zfill(2)}.rar", "document_links": f"http://example.com/{i}"}
             for i in range(10)
         ]
-        service = DocumentSearchService(self.db_manager, self.download_dir)
+        service = DocumentSearchService(self.db_manager, self.download_dir, cleanup_manager=self.cleanup_manager)
 
         def fake_download(doc):
             path = Path(self.temp_dir.name) / doc["file_name"]
@@ -97,7 +107,7 @@ class DocumentSearchServiceTestCase(unittest.TestCase):
             {"file_name": f"Сметная_документация.part{str(i).zfill(2)}.rar", "document_links": f"http://example.com/{i}"}
             for i in range(3)
         ]
-        service = DocumentSearchService(self.db_manager, self.download_dir)
+        service = DocumentSearchService(self.db_manager, self.download_dir, cleanup_manager=self.cleanup_manager)
 
         def fake_download(doc):
             if doc["file_name"].endswith("02.rar"):

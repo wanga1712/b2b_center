@@ -10,19 +10,25 @@ from PyQt5.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QDialog,
     QScrollArea, QWidget, QTextEdit, QMessageBox, QApplication
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QUrl
+from PyQt5.QtCore import Qt, pyqtSignal, QUrl, QThread
 from PyQt5.QtGui import QFont, QDesktopServices
 from typing import Dict, Any, Optional, TYPE_CHECKING
 from datetime import datetime
+from pathlib import Path
 from loguru import logger
 
 from modules.styles.general_styles import (
-    COLORS, FONT_SIZES, SIZES, apply_label_style, apply_button_style
+    COLORS, FONT_SIZES, SIZES, apply_label_style, apply_button_style,
+    apply_text_style_light, apply_text_style_primary, apply_font_weight
 )
 from core.exceptions import DocumentSearchError
 
 if TYPE_CHECKING:
     from services.document_search_service import DocumentSearchService
+    from services.archive_processing_service import ArchiveProcessingService
+    from modules.bids.document_search_result_dialog import DocumentSearchResultDialog
+
+from modules.bids.document_search_progress_dialog import DocumentSearchProgressDialog
 
 
 class TenderCard(QFrame):
@@ -92,7 +98,7 @@ class TenderCard(QFrame):
         if contract_number:
             contract_label = QLabel(f"№ {contract_number}")
             apply_label_style(contract_label, 'small')
-            contract_label.setStyleSheet(f"color: {COLORS['text_light']};")
+            apply_text_style_light(contract_label)
             info_layout.addWidget(contract_label)
         
         # Регион
@@ -100,7 +106,7 @@ class TenderCard(QFrame):
         if region_name:
             region_label = QLabel(f"📍 {region_name}")
             apply_label_style(region_label, 'small')
-            region_label.setStyleSheet(f"color: {COLORS['text_light']};")
+            apply_text_style_light(region_label)
             info_layout.addWidget(region_label)
         
         # Заказчик
@@ -111,7 +117,7 @@ class TenderCard(QFrame):
         if customer_name:
             customer_label = QLabel(f"👤 {customer_name[:50]}")
             apply_label_style(customer_label, 'small')
-            customer_label.setStyleSheet(f"color: {COLORS['text_light']};")
+            apply_text_style_light(customer_label)
             customer_label.setToolTip(customer_name)
             info_layout.addWidget(customer_label)
         
@@ -128,7 +134,8 @@ class TenderCard(QFrame):
             price_str = f"{float(initial_price):,.0f}".replace(',', ' ')
             price_label = QLabel(f"💰 {price_str} ₽")
             apply_label_style(price_label, 'normal')
-            price_label.setStyleSheet(f"color: {COLORS['primary']}; font-weight: bold;")
+            apply_text_style_primary(price_label)
+            apply_font_weight(price_label)
             price_date_layout.addWidget(price_label)
         
         # Дата окончания
@@ -143,7 +150,7 @@ class TenderCard(QFrame):
                 date_str = end_date.strftime('%d.%m.%Y')
                 date_label = QLabel(f"📅 До {date_str}")
                 apply_label_style(date_label, 'small')
-                date_label.setStyleSheet(f"color: {COLORS['text_light']};")
+                apply_text_style_light(date_label)
                 price_date_layout.addWidget(date_label)
         
         price_date_layout.addStretch()
@@ -157,7 +164,7 @@ class TenderCard(QFrame):
         if okpd_code:
             okpd_label = QLabel(f"ОКПД: {okpd_code}")
             apply_label_style(okpd_label, 'small')
-            okpd_label.setStyleSheet(f"color: {COLORS['text_light']};")
+            apply_text_style_light(okpd_label)
             layout.addWidget(okpd_label)
         
         # Кнопка открытия ссылки
@@ -202,8 +209,9 @@ class TenderDetailDialog(QDialog):
         super().__init__(parent)
         self.tender_data = tender_data
         self.document_search_service = document_search_service
-        self.setWindowTitle("Подробная информация о торге")
-        self.setMinimumSize(800, 600)
+        self._document_search_worker: Optional['DocumentSearchWorker'] = None
+        from modules.styles.ui_config import configure_dialog
+        configure_dialog(self, "Подробная информация о торге", size_preset="tender_detail")
         self.init_ui()
     
     def init_ui(self):
@@ -346,39 +354,140 @@ class TenderDetailDialog(QDialog):
             )
             return
 
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        try:
-            result = self.document_search_service.run_document_search(documents)
-            self._show_document_search_results(result)
-        except DocumentSearchError as error:
+        # Создаем диалог прогресса
+        progress_dialog = DocumentSearchProgressDialog(self)
+        
+        # Создаем worker thread для выполнения поиска
+        self._document_search_worker = DocumentSearchWorker(
+            self.document_search_service,
+            documents,
+            self.tender_data.get('id'),
+            self._determine_registry_type(),
+        )
+        
+        # Подключаем сигналы для обновления прогресса
+        self._document_search_worker.progress_updated.connect(progress_dialog.set_stage)
+        self._document_search_worker.finished.connect(
+            lambda result: self._on_search_finished(result, progress_dialog),
+        )
+        self._document_search_worker.error_occurred.connect(
+            lambda error: self._on_search_error(error, progress_dialog),
+        )
+        progress_dialog.cancelled.connect(self._document_search_worker.cancel)
+        
+        # Запускаем worker
+        self._document_search_worker.start()
+        
+        # Показываем диалог (блокирующий)
+        progress_dialog.exec_()
+        
+        self._finalize_document_search_worker()
+    
+    def _on_search_finished(self, result: Dict[str, Any], progress_dialog: DocumentSearchProgressDialog):
+        """Обработка завершения поиска"""
+        logger.info("Поиск завершен, закрываю диалог прогресса и показываю результаты")
+        # Убеждаемся, что прогресс доходит до 100%
+        progress_dialog.set_stage("Завершено", 100, "Обработка завершена")
+        # Даем время на обновление UI
+        from PyQt5.QtWidgets import QApplication
+        QApplication.processEvents()
+        # Закрываем диалог
+        progress_dialog.accept()
+        # Показываем результаты
+        self._show_document_search_results(result)
+    
+    def _on_search_error(self, error: str, progress_dialog: DocumentSearchProgressDialog):
+        """Обработка ошибки поиска"""
+        progress_dialog.reject()
+        if isinstance(error, DocumentSearchError):
             QMessageBox.information(self, "Поиск по документации", str(error))
-        except Exception as error:
+        else:
             logger.exception("Ошибка поиска по документации")
             QMessageBox.critical(
                 self,
                 "Ошибка",
                 f"Не удалось выполнить поиск по документации:\n{error}",
             )
-        finally:
-            QApplication.restoreOverrideCursor()
-
+    
     def _show_document_search_results(self, result: Dict[str, Any]) -> None:
         """Отображение результатов поиска."""
-        logger.info("Отображение результатов поиска по документации")
-        matches = result.get("matches", [])
-        file_path = result.get("file_path")
+        try:
+            logger.info("Отображение результатов поиска по документации")
+            
+            # Проверяем и валидируем данные
+            if not result:
+                logger.error("Результат поиска пуст")
+                QMessageBox.warning(self, "Результаты поиска", "Результаты поиска не получены.")
+                return
+            
+            matches = result.get("matches", [])
+            if not isinstance(matches, list):
+                logger.error(f"Неверный формат matches: {type(matches)}")
+                matches = []
+            
+            logger.debug(f"Найдено совпадений для отображения: {len(matches)}")
+            
+            try:
+                grouped = ArchiveProcessingService.group_matches_by_score(matches)
+            except Exception as e:
+                logger.error(f"Ошибка группировки совпадений: {e}", exc_info=True)
+                grouped = {"exact": [], "good": []}
+            
+            tender_folder = result.get("tender_folder")
+            if not tender_folder:
+                tender_folder = self.document_search_service.download_dir
+            tender_folder = Path(tender_folder)
+            
+            download_root = self.document_search_service.download_dir
+            if not download_root:
+                logger.error("download_dir не установлен")
+                QMessageBox.warning(self, "Ошибка", "Не удалось определить директорию загрузки.")
+                return
+            
+            logger.debug(f"Создание диалога результатов: совпадений={len(matches)}, папка={tender_folder}")
+            
+            dialog = DocumentSearchResultDialog(
+                self,
+                grouped_matches=grouped,
+                tender_folder=tender_folder,
+                download_root=download_root,
+            )
+            logger.debug("Диалог результатов создан, показываю")
+            dialog.exec_()
+            logger.debug("Диалог результатов закрыт")
+        except Exception as e:
+            logger.exception("Критическая ошибка при отображении результатов поиска")
+            QMessageBox.critical(
+                self,
+                "Ошибка отображения результатов",
+                f"Не удалось отобразить результаты поиска:\n{str(e)}\n\nПроверьте логи для подробностей.",
+            )
+    
+    def _finalize_document_search_worker(self) -> None:
+        """Гарантирует корректное завершение worker-потока."""
+        if not self._document_search_worker:
+            return
 
-        if matches:
-            lines = [
-                f"- {item['product_name']} ({item['score']}%) — «{item['matched_text']}»"
-                for item in matches[:10]
-            ]
-            matches_text = "\n".join(lines)
+        worker = self._document_search_worker
+        if worker.isRunning():
+            worker.requestInterruption()
+            worker.wait()
         else:
-            matches_text = "Совпадений не найдено."
+            worker.wait()
 
-        message = f"Документ: {file_path}\n\n{matches_text}"
-        QMessageBox.information(self, "Поиск по документации", message)
+        self._document_search_worker = None
+    
+    def _determine_registry_type(self) -> str:
+        """Определяет тип реестра (44ФЗ/223ФЗ) для именования папок."""
+        raw_value = (
+            self.tender_data.get('registry_type')
+            or self.tender_data.get('law')
+            or ''
+        )
+        value = str(raw_value).lower()
+        if '223' in value:
+            return '223fz'
+        return '44fz'
     
     def _create_separator(self) -> QFrame:
         """Создание разделителя"""
@@ -412,10 +521,12 @@ class TenderDetailDialog(QDialog):
                 item_layout = QHBoxLayout()
                 label_widget = QLabel(f"{label}:")
                 apply_label_style(label_widget, 'normal')
-                label_widget.setStyleSheet(f"color: {COLORS['text_light']}; min-width: 150px;")
+                apply_text_style_light(label_widget)
+                label_widget.setStyleSheet(label_widget.styleSheet() + " min-width: 150px;")
                 item_layout.addWidget(label_widget)
                 
                 value_widget = QLabel(str(value))
+                value_widget.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 apply_label_style(value_widget, 'normal')
                 value_widget.setWordWrap(True)
                 item_layout.addWidget(value_widget)
@@ -473,4 +584,57 @@ class TenderDetailDialog(QDialog):
             return str(date_value)
         except:
             return str(date_value) if date_value else "—"
+
+
+class DocumentSearchWorker(QThread):
+    """Worker thread для выполнения поиска по документации в фоне"""
+    
+    progress_updated = pyqtSignal(str, int, str)  # stage, progress, detail
+    finished = pyqtSignal(dict)  # result
+    error_occurred = pyqtSignal(str)  # error message
+    
+    def __init__(
+        self,
+        document_search_service: 'DocumentSearchService',
+        documents: list,
+        tender_id: Optional[int],
+        registry_type: str,
+    ):
+        super().__init__()
+        self.document_search_service = document_search_service
+        self.documents = documents
+        self.tender_id = tender_id
+        self.registry_type = registry_type
+        self._cancelled = False
+        self._previous_progress_callback = document_search_service.progress_callback
+        
+        # Устанавливаем callback для обновления прогресса
+        self.document_search_service.progress_callback = self._update_progress
+    
+    def _update_progress(self, stage: str, progress: int, detail: Optional[str] = None):
+        """Callback для обновления прогресса"""
+        if not self._cancelled:
+            logger.debug(f"Обновление прогресса: {stage} - {progress}% - {detail or ''}")
+            self.progress_updated.emit(stage, progress, detail or "")
+    
+    def cancel(self):
+        """Отмена операции"""
+        self._cancelled = True
+    
+    def run(self):
+        """Выполнение поиска в фоновом потоке"""
+        try:
+            result = self.document_search_service.run_document_search(
+                self.documents,
+                tender_id=self.tender_id,
+                registry_type=self.registry_type,
+            )
+            if not self._cancelled:
+                self.finished.emit(result)
+        except Exception as error:
+            if not self._cancelled:
+                self.error_occurred.emit(str(error))
+        finally:
+            if self.document_search_service.progress_callback is self._update_progress:
+                self.document_search_service.progress_callback = self._previous_progress_callback
 

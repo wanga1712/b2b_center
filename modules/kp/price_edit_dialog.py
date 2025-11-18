@@ -25,8 +25,8 @@ class PriceEditDialog(QDialog):
             parent: Родительский виджет
         """
         super().__init__(parent)
-        self.setWindowTitle("Редактирование цены товара")
-        self.setMinimumWidth(350)
+        from modules.styles.ui_config import configure_dialog
+        configure_dialog(self, "Редактирование цены товара", size_preset="small", min_width=350)
         
         layout = QVBoxLayout(self)
         layout.setSpacing(15)

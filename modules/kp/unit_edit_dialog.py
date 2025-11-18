@@ -26,8 +26,8 @@ class UnitEditDialog(QDialog):
             parent: Родительский виджет
         """
         super().__init__(parent)
-        self.setWindowTitle("Редактирование единицы измерения")
-        self.setMinimumWidth(400)
+        from modules.styles.ui_config import configure_dialog
+        configure_dialog(self, "Редактирование единицы измерения", size_preset="small", min_width=400)
         
         layout = QVBoxLayout(self)
         layout.setSpacing(15)

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 import logging
 from loguru import logger
@@ -68,10 +69,13 @@ class Config:
         self.delivery = self._load_delivery_config()
         self.ui = self._load_ui_config()
         self.app = self._load_app_config()
-        self.unrar_tool = self._get_env_var("UNRAR_TOOL")
-        self.document_download_dir = self._get_env_var("DOCUMENT_DOWNLOAD_DIR")
+        default_unrar_tool = r"C:\Program Files\WinRAR\UnRAR.exe"
+        default_download_dir = r"C:\Users\wangr\YandexDisk\Обмен информацией\Отдел продаж\торги"
+        self.unrar_tool = self._get_env_var("UNRAR_TOOL", default_unrar_tool)
+        self.document_download_dir = self._get_env_var("DOCUMENT_DOWNLOAD_DIR", default_download_dir)
         self.winrar_path = self._get_env_var("WINRAR_PATH", r"C:\Program Files\WinRAR")
 
+        self._configure_external_tools()
         logger.info("Конфигурация успешно загружена")
 
     def _load_environment(self, env_file: Optional[str]) -> None:
@@ -125,6 +129,18 @@ class Config:
         except (TypeError, ValueError) as e:
             logger.warning(f"Неверный формат int для {key}: {e}, используется значение по умолчанию: {default}")
             return default
+
+    def _configure_external_tools(self) -> None:
+        """Настройка путей для WinRAR/UnRAR в системных переменных."""
+        if self.winrar_path:
+            winrar_dir = Path(self.winrar_path)
+            if winrar_dir.exists():
+                current_path = os.environ.get("PATH", "")
+                path_parts = current_path.split(os.pathsep) if current_path else []
+                if str(winrar_dir) not in path_parts:
+                    os.environ["PATH"] = os.pathsep.join(path_parts + [str(winrar_dir)]) if path_parts else str(winrar_dir)
+        if self.unrar_tool:
+            os.environ.setdefault("UNRAR_TOOL", self.unrar_tool)
 
     def _get_env_bool(self, key: str, default: bool = False) -> bool:
         """Получение bool переменной из окружения"""
