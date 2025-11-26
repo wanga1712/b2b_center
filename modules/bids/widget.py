@@ -1,19 +1,19 @@
 """
-Виджет для управления торгами (44ФЗ и 223ФЗ)
+Виджет для управления закупками (44ФЗ и 223ФЗ)
 
 Виджет предоставляет интерфейс для:
-- Управления новыми торгами 44ФЗ и 223ФЗ через канбан-доски
-- Просмотра разыгранных торгов
-- Настройки параметров торгов
-- Отслеживания торгов в работе
+- Управления новыми закупками 44ФЗ и 223ФЗ через канбан-доски
+- Просмотра разыгранных закупок
+- Настройки параметров закупок
+- Отслеживания закупок в работе
 """
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QFrame,
     QLineEdit, QPushButton, QListWidget, QListWidgetItem, QScrollArea,
-    QMessageBox, QComboBox
+    QMessageBox, QComboBox, QDialog, QTextEdit
 )
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
 from typing import Optional, Dict, Any, List
 from pathlib import Path
 from loguru import logger
@@ -25,11 +25,12 @@ from modules.styles.general_styles import (
     COLORS, FONT_SIZES, SIZES, apply_text_style_light_italic
 )
 
-# Импортируем виджеты для торгов
+# Импортируем виджеты для закупок
 from modules.bids.tender_list_widget import TenderListWidget
 
-# Импортируем репозиторий для работы с торгами
+# Импортируем репозиторий для работы с закупками
 from services.tender_repository import TenderRepository
+from services.tender_match_repository import TenderMatchRepository
 from services.document_search_service import DocumentSearchService
 from core.tender_database import TenderDatabaseManager
 from config.settings import config
@@ -40,15 +41,168 @@ from core.database import DatabaseManager
 # Пример: DOCUMENT_DOWNLOAD_DIR=C:\Projects\Documents\Tenders
 
 
+class ProcessOutputReader(QThread):
+    """Поток для чтения вывода процесса в реальном времени"""
+    
+    output_signal = pyqtSignal(str)
+    finished_signal = pyqtSignal(int)
+    
+    def __init__(self, process):
+        super().__init__()
+        self.process = process
+    
+    def run(self):
+        """Чтение вывода процесса"""
+        try:
+            # Для всех платформ используем простой подход с readline
+            # stderr объединен с stdout через stderr=subprocess.STDOUT
+            while True:
+                output = self.process.stdout.readline()
+                if not output:
+                    # Если строка пустая, проверяем, завершен ли процесс
+                    if self.process.poll() is not None:
+                        break
+                    # Если процесс еще работает, продолжаем ждать
+                    continue
+                # Отправляем строку (убираем только завершающие символы новой строки)
+                self.output_signal.emit(output.rstrip('\n\r'))
+            
+            # Процесс завершен, читаем оставшийся вывод
+            # Используем communicate() только если процесс уже завершен
+            try:
+                remaining_output, _ = self.process.communicate(timeout=0.1)
+                if remaining_output:
+                    for line in remaining_output.splitlines():
+                        if line.strip():
+                            self.output_signal.emit(line.strip())
+            except Exception:
+                # Игнорируем ошибки при чтении оставшегося вывода
+                pass
+            
+            # Отправляем код завершения
+            return_code = self.process.returncode if self.process.returncode is not None else 0
+            self.finished_signal.emit(return_code)
+        except Exception as e:
+            logger.error(f"Ошибка чтения вывода процесса: {e}")
+            self.output_signal.emit(f"[ERROR] Ошибка чтения вывода: {e}")
+            self.finished_signal.emit(-1)
+
+
+class ProcessOutputDialog(QDialog):
+    """Диалог для отображения вывода консоли процесса"""
+    
+    def __init__(self, parent=None, title="Вывод процесса"):
+        super().__init__(parent)
+        from modules.styles.ui_config import configure_dialog
+        configure_dialog(self, title, size_preset="xlarge", min_width=800, min_height=600)
+        self.setModal(False)  # Не модальное окно, чтобы можно было работать с приложением
+        self.process = None
+        self.reader_thread = None
+        self.init_ui()
+    
+    def init_ui(self):
+        """Инициализация интерфейса диалога"""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(10)
+        
+        # Заголовок
+        title_label = QLabel("📊 Вывод процесса обработки документов")
+        apply_label_style(title_label, 'h2')
+        layout.addWidget(title_label)
+        
+        # Текстовое поле для вывода
+        self.output_text = QTextEdit()
+        self.output_text.setReadOnly(True)
+        self.output_text.setStyleSheet(f"""
+            QTextEdit {{
+                background: {COLORS['white']};
+                border: 1px solid {COLORS['border']};
+                border-radius: {SIZES['border_radius_normal']}px;
+                padding: 10px;
+                font-family: 'Consolas', 'Courier New', monospace;
+                font-size: {FONT_SIZES['small']};
+            }}
+        """)
+        layout.addWidget(self.output_text)
+        
+        # Кнопки
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        self.close_button = QPushButton("Закрыть")
+        apply_button_style(self.close_button, 'outline')
+        self.close_button.clicked.connect(self.close)
+        self.close_button.setEnabled(False)  # Отключаем до завершения процесса
+        button_layout.addWidget(self.close_button)
+        
+        layout.addLayout(button_layout)
+    
+    def start_process(self, process):
+        """Запуск процесса и начало чтения вывода"""
+        self.process = process
+        
+        # Создаем и запускаем поток чтения
+        self.reader_thread = ProcessOutputReader(process)
+        self.reader_thread.output_signal.connect(self.append_output)
+        self.reader_thread.finished_signal.connect(self.on_process_finished)
+        self.reader_thread.start()
+        
+        self.append_output("Процесс запущен...")
+    
+    def append_output(self, text: str):
+        """Добавление текста в вывод"""
+        if text:
+            self.output_text.append(text)
+            # Автопрокрутка вниз
+            scrollbar = self.output_text.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
+    
+    def on_process_finished(self, return_code: int):
+        """Обработка завершения процесса"""
+        if return_code == 0:
+            self.append_output("\n[SUCCESS] Процесс успешно завершен.")
+        else:
+            self.append_output(f"\n[ERROR] Процесс завершен с кодом: {return_code}")
+        
+        self.close_button.setEnabled(True)
+    
+    def closeEvent(self, event):
+        """Обработка закрытия окна"""
+        if self.reader_thread and self.reader_thread.isRunning():
+            # Если процесс еще выполняется, просто закрываем окно
+            # Процесс продолжит работу в фоне
+            pass
+        super().closeEvent(event)
+
+
 class BidsWidget(QWidget):
     """
-    Виджет для управления торгами
+    Виджет для управления закупками
     
-    Содержит вкладки для различных типов торгов и их статусов.
+    Содержит вкладки для различных типов закупок и их статусов.
     """
     
-    def __init__(self, product_db_manager: Optional[DatabaseManager] = None):
+    def __init__(
+        self,
+        product_db_manager: Optional[DatabaseManager] = None,
+        tender_repository: Optional[TenderRepository] = None,
+        tender_match_repository: Optional[TenderMatchRepository] = None,
+        document_search_service: Optional[DocumentSearchService] = None,
+    ):
+        """
+        Инициализация виджета закупок
+        
+        Args:
+            product_db_manager: Менеджер БД продуктов (для обратной совместимости)
+            tender_repository: Репозиторий закупок (опционально, создается через DI если не передан)
+            tender_match_repository: Репозиторий результатов поиска (опционально)
+            document_search_service: Сервис поиска документов (опционально)
+        """
         super().__init__()
+        
+        # Внедрение зависимостей через DI контейнер или переданные параметры
+        from core.dependency_injection import container
         
         # Инициализация подключения к БД tender_monitor (обязательно)
         if not config.tender_database:
@@ -57,9 +211,21 @@ class BidsWidget(QWidget):
             raise ValueError(error_msg)
         
         try:
-            self.tender_db_manager = TenderDatabaseManager(config.tender_database)
-            self.tender_db_manager.connect()
-            self.tender_repo = TenderRepository(self.tender_db_manager)
+            # Используем переданные зависимости или создаем через контейнер
+            if tender_repository:
+                self.tender_repo = tender_repository
+                self.tender_db_manager = tender_repository.db_manager if hasattr(tender_repository, 'db_manager') else None
+            else:
+                self.tender_db_manager = container.get_tender_database_manager()
+                self.tender_repo = container.get_tender_repository()
+            
+            if tender_match_repository:
+                self.tender_match_repo = tender_match_repository
+            else:
+                self.tender_match_repo = container.get_tender_match_repository()
+            # Алиас для обратной совместимости с новым именем атрибута
+            self.tender_match_repository = self.tender_match_repo
+            
             logger.info("Подключение к БД tender_monitor установлено")
         except Exception as e:
             logger.error(f"Ошибка подключения к БД tender_monitor: {e}")
@@ -68,8 +234,11 @@ class BidsWidget(QWidget):
         # Временный ID пользователя (позже будет из системы авторизации)
         self.current_user_id = 1
         self.product_db_manager = product_db_manager
-        self.document_search_service: Optional[DocumentSearchService] = None
-        if self.product_db_manager:
+        
+        # Инициализация сервиса поиска документов
+        if document_search_service:
+            self.document_search_service = document_search_service
+        elif self.product_db_manager:
             # Получаем путь к директории для скачивания документов из .env
             download_dir = Path(config.document_download_dir) if config.document_download_dir else Path.home() / "Downloads" / "ЕИС_Документация"
             self.document_search_service = DocumentSearchService(
@@ -80,7 +249,13 @@ class BidsWidget(QWidget):
             )
             logger.info("Сервис поиска по документации инициализирован")
         else:
-            logger.warning("Сервис поиска документации недоступен: не передан менеджер БД продуктов")
+            # Пытаемся получить через контейнер
+            try:
+                self.document_search_service = container.get_document_search_service()
+                logger.info("Сервис поиска по документации получен через DI контейнер")
+            except Exception as e:
+                logger.warning(f"Сервис поиска документации недоступен: {e}")
+                self.document_search_service = None
         
         self.init_ui()
     
@@ -97,13 +272,43 @@ class BidsWidget(QWidget):
         header_layout = QVBoxLayout(header_frame)
         header_layout.setContentsMargins(20, 15, 20, 15)
         
-        title = QLabel("📈 Торги")
+        # Заголовок и кнопка обновления в одной строке
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        
+        title = QLabel("📈 Закупки")
         apply_label_style(title, 'h1')
-        header_layout.addWidget(title)
+        header_row.addWidget(title)
+        
+        header_row.addStretch()
+        
+        # Кнопка анализа документации для выбранных закупок
+        self.analyze_button = QPushButton("📄 Анализ выбранных")
+        apply_button_style(self.analyze_button, 'primary')
+        self.analyze_button.clicked.connect(self.handle_analyze_selected_tenders)
+        self.analyze_button.setToolTip("Запустить анализ документации для выбранных закупок")
+        self.analyze_button.setEnabled(False)  # Включается только когда есть выбранные закупки
+        header_row.addWidget(self.analyze_button)
+        
+        # Кнопка анализа всех закупок (с учетом приоритетных)
+        self.analyze_all_button = QPushButton("📊 Анализировать все")
+        apply_button_style(self.analyze_all_button, 'secondary')
+        self.analyze_all_button.clicked.connect(self.handle_analyze_all_tenders)
+        self.analyze_all_button.setToolTip("Запустить анализ документации для всех закупок (приоритетные обрабатываются первыми)")
+        header_row.addWidget(self.analyze_all_button)
+        
+        # Кнопка обновления ленты
+        self.refresh_button = QPushButton("🔄 Обновить ленту")
+        apply_button_style(self.refresh_button, 'outline')
+        self.refresh_button.clicked.connect(self.refresh_current_feed)
+        self.refresh_button.setToolTip("Обновить статусы обработки документов для всех закупок")
+        header_row.addWidget(self.refresh_button)
+        
+        header_layout.addLayout(header_row)
         
         main_layout.addWidget(header_frame)
         
-        # Вкладки для различных разделов торгов
+        # Вкладки для различных разделов закупок
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet(f"""
             QTabWidget::pane {{
@@ -133,48 +338,48 @@ class BidsWidget(QWidget):
         settings_tab = self.create_settings_tab()
         self.tabs.addTab(settings_tab, "Настройки")
         
-        # === ВКЛАДКА "НОВЫЕ ТОРГИ 44ФЗ" ===
+        # === ВКЛАДКА "НОВЫЕ ЗАКУПКИ 44ФЗ" ===
         self.tenders_44fz_widget = TenderListWidget(
             document_search_service=self.document_search_service,
+            tender_match_repository=self.tender_match_repo,
         )
-        self.tabs.addTab(self.tenders_44fz_widget, "Новые торги 44ФЗ")
-        # Загружаем торги при первом показе вкладки
+        self.tabs.addTab(self.tenders_44fz_widget, "Новые закупки 44ФЗ")
+        # Загружаем закупки при первом показе вкладки
         self.tabs.currentChanged.connect(self.on_tab_changed)
         
-        # === ВКЛАДКА "НОВЫЕ ТОРГИ 223ФЗ" ===
+        # === ВКЛАДКА "НОВЫЕ ЗАКУПКИ 223ФЗ" ===
         self.tenders_223fz_widget = TenderListWidget(
             document_search_service=self.document_search_service,
+            tender_match_repository=self.tender_match_repo,
         )
-        self.tabs.addTab(self.tenders_223fz_widget, "Новые торги 223ФЗ")
+        self.tabs.addTab(self.tenders_223fz_widget, "Новые закупки 223ФЗ")
         
-        # === ВКЛАДКА "РАЗЫГРАННЫЕ ТОРГИ 44ФЗ" ===
-        # TODO: Реализовать позже
-        won_44fz_tab = QWidget()
-        won_44fz_layout = QVBoxLayout(won_44fz_tab)
-        won_44fz_label = QLabel("Разыгранные торги 44ФЗ")
-        apply_label_style(won_44fz_label, 'h2')
-        won_44fz_layout.addWidget(won_44fz_label)
-        self.tabs.addTab(won_44fz_tab, "Разыгранные торги 44ФЗ")
+        # === ВКЛАДКА "РАЗЫГРАННЫЕ ЗАКУПКИ 44ФЗ" ===
+        self.won_tenders_44fz_widget = TenderListWidget(
+            parent=self,
+            document_search_service=self.document_search_service,
+            tender_match_repository=self.tender_match_repository,
+        )
+        self.tabs.addTab(self.won_tenders_44fz_widget, "Разыгранные закупки 44ФЗ")
         
-        # === ВКЛАДКА "РАЗЫГРАННЫЕ ТОРГИ 223ФЗ" ===
-        # TODO: Реализовать позже
-        won_223fz_tab = QWidget()
-        won_223fz_layout = QVBoxLayout(won_223fz_tab)
-        won_223fz_label = QLabel("Разыгранные торги 223ФЗ")
-        apply_label_style(won_223fz_label, 'h2')
-        won_223fz_layout.addWidget(won_223fz_label)
-        self.tabs.addTab(won_223fz_tab, "Разыгранные торги 223ФЗ")
+        # === ВКЛАДКА "РАЗЫГРАННЫЕ ЗАКУПКИ 223ФЗ" ===
+        self.won_tenders_223fz_widget = TenderListWidget(
+            parent=self,
+            document_search_service=self.document_search_service,
+            tender_match_repository=self.tender_match_repository,
+        )
+        self.tabs.addTab(self.won_tenders_223fz_widget, "Разыгранные закупки 223ФЗ")
         
         # === ВКЛАДКА "В РАБОТЕ" ===
         in_work_tab = QWidget()
         in_work_layout = QVBoxLayout(in_work_tab)
         in_work_layout.setContentsMargins(20, 20, 20, 20)
         
-        in_work_label = QLabel("Торги в работе")
+        in_work_label = QLabel("Закупки в работе")
         apply_label_style(in_work_label, 'h2')
         in_work_layout.addWidget(in_work_label)
         
-        in_work_info = QLabel("Раздел торгов в работе будет реализован позже")
+        in_work_info = QLabel("Раздел закупок в работе будет реализован позже")
         apply_label_style(in_work_info, 'normal')
         apply_text_style_light_italic(in_work_info)
         in_work_layout.addWidget(in_work_info)
@@ -186,30 +391,54 @@ class BidsWidget(QWidget):
         main_layout.addWidget(self.tabs)
     
     def on_tab_changed(self, index: int):
-        """Обработка смены вкладки - загрузка данных при первом открытии"""
-        tab_text = self.tabs.tabText(index)
-        
-        if tab_text == "Новые торги 44ФЗ":
-            if not hasattr(self.tenders_44fz_widget, '_loaded'):
-                self.load_tenders_44fz()
-                self.tenders_44fz_widget._loaded = True
-        elif tab_text == "Новые торги 223ФЗ":
-            if not hasattr(self.tenders_223fz_widget, '_loaded'):
-                self.load_tenders_223fz()
-                self.tenders_223fz_widget._loaded = True
+        """Обработка смены вкладки - НЕ загружаем данные автоматически"""
+        # Загрузка данных теперь происходит только по кнопке "Показать тендеры"
+        pass
     
-    def load_tenders_44fz(self):
-        """Загрузка новых торгов 44ФЗ"""
+    def refresh_current_feed(self):
+        """Обновление текущей ленты закупок"""
+        current_index = self.tabs.currentIndex()
+        tab_text = self.tabs.tabText(current_index)
+        
+        if tab_text == "Новые закупки 44ФЗ":
+            logger.info("Обновление ленты закупок 44ФЗ...")
+            self.load_tenders_44fz(force=True)
+            self.tenders_44fz_widget._loaded = True
+        elif tab_text == "Новые закупки 223ФЗ":
+            logger.info("Обновление ленты закупок 223ФЗ...")
+            self.load_tenders_223fz(force=True)
+            self.tenders_223fz_widget._loaded = True
+        elif tab_text == "Разыгранные закупки 44ФЗ":
+            logger.info("Обновление ленты разыгранных закупок 44ФЗ...")
+            self.load_won_tenders_44fz(force=True)
+            self.won_tenders_44fz_widget._loaded = True
+        elif tab_text == "Разыгранные закупки 223ФЗ":
+            logger.info("Обновление ленты разыгранных закупок 223ФЗ...")
+            self.load_won_tenders_223fz(force=True)
+            self.won_tenders_223fz_widget._loaded = True
+        else:
+            logger.info(f"Обновление недоступно для вкладки: {tab_text}")
+    
+    def load_tenders_44fz(self, force: bool = False):
+        """Загрузка новых закупок 44ФЗ"""
         if not self.tender_repo:
-            logger.warning("Репозиторий торгов не инициализирован")
+            logger.warning("Репозиторий закупок не инициализирован")
             return
         
         # Показываем индикатор загрузки
         self.tenders_44fz_widget.show_loading()
         
         # Получаем настройки пользователя
-        user_okpd = self.tender_repo.get_user_okpd_codes(self.current_user_id)
-        user_okpd_codes = [okpd.get('okpd_code', '') for okpd in user_okpd if okpd.get('okpd_code')]
+        # Проверяем, выбрана ли категория для фильтрации
+        category_id = None
+        if hasattr(self, 'category_filter_combo') and self.category_filter_combo:
+            category_id = self.category_filter_combo.currentData()
+        
+        user_okpd_codes = None
+        if category_id is None:
+            # Если категория не выбрана, используем все ОКПД коды пользователя
+            user_okpd = self.tender_repo.get_user_okpd_codes(self.current_user_id)
+            user_okpd_codes = [okpd.get('okpd_code', '') for okpd in user_okpd if okpd.get('okpd_code')]
         
         user_stop_words_data = self.tender_repo.get_user_stop_words(self.current_user_id)
         user_stop_words = [sw.get('stop_word', '') for sw in user_stop_words_data if sw.get('stop_word')]
@@ -217,14 +446,15 @@ class BidsWidget(QWidget):
         # TODO: Получить region_id из настроек пользователя (пока None = все регионы)
         region_id = None
         
-        # Загружаем торги в отдельном потоке (упрощенная версия - можно улучшить)
+        # Загружаем закупки в отдельном потоке (упрощенная версия - можно улучшить)
         try:
             tenders = self.tender_repo.get_new_tenders_44fz(
                 user_id=self.current_user_id,
                 user_okpd_codes=user_okpd_codes,
                 user_stop_words=user_stop_words,
                 region_id=region_id,
-                limit=1000  # Увеличено до 1000 торгов для отображения
+                category_id=category_id,
+                limit=1000  # Увеличено до 1000 закупок для отображения
             )
             # Извлекаем информацию о количестве из первого элемента
             total_count = None
@@ -232,27 +462,42 @@ class BidsWidget(QWidget):
                 total_count = tenders[0].pop('_total_count', len(tenders))
                 tenders[0].pop('_loaded_count', None)  # Удаляем служебное поле
             
-            logger.info(f"Отображаем торгов 44ФЗ: {len(tenders)} (всего в БД: {total_count})")
-            self.tenders_44fz_widget.set_tenders(tenders, total_count)
+            logger.info(f"Отображаем закупки 44ФЗ: {len(tenders)} (всего в БД: {total_count})")
+            
+            if force:
+                # Принудительное обновление - пересоздаем карточки
+                self.tenders_44fz_widget.set_tenders(tenders, total_count)
+            else:
+                # Обычная загрузка - обновляем существующие карточки или создаем новые
+                self.tenders_44fz_widget.update_tenders(tenders, total_count)
+            
             if self.document_search_service:
                 self.document_search_service.ensure_products_loaded()
         except Exception as e:
-            logger.error(f"Ошибка при загрузке торгов 44ФЗ: {e}")
+            logger.error(f"Ошибка при загрузке закупок 44ФЗ: {e}")
             self.tenders_44fz_widget.hide_loading()
-            QMessageBox.warning(self, "Ошибка", f"Не удалось загрузить торги:\n{e}")
+            QMessageBox.warning(self, "Ошибка", f"Не удалось загрузить закупки:\n{e}")
     
-    def load_tenders_223fz(self):
-        """Загрузка новых торгов 223ФЗ"""
+    def load_tenders_223fz(self, force: bool = False):
+        """Загрузка новых закупок 223ФЗ"""
         if not self.tender_repo:
-            logger.warning("Репозиторий торгов не инициализирован")
+            logger.warning("Репозиторий закупок не инициализирован")
             return
         
         # Показываем индикатор загрузки
         self.tenders_223fz_widget.show_loading()
         
         # Получаем настройки пользователя
-        user_okpd = self.tender_repo.get_user_okpd_codes(self.current_user_id)
-        user_okpd_codes = [okpd.get('okpd_code', '') for okpd in user_okpd if okpd.get('okpd_code')]
+        # Проверяем, выбрана ли категория для фильтрации
+        category_id = None
+        if hasattr(self, 'category_filter_combo') and self.category_filter_combo:
+            category_id = self.category_filter_combo.currentData()
+        
+        user_okpd_codes = None
+        if category_id is None:
+            # Если категория не выбрана, используем все ОКПД коды пользователя
+            user_okpd = self.tender_repo.get_user_okpd_codes(self.current_user_id)
+            user_okpd_codes = [okpd.get('okpd_code', '') for okpd in user_okpd if okpd.get('okpd_code')]
         
         user_stop_words_data = self.tender_repo.get_user_stop_words(self.current_user_id)
         user_stop_words = [sw.get('stop_word', '') for sw in user_stop_words_data if sw.get('stop_word')]
@@ -260,14 +505,15 @@ class BidsWidget(QWidget):
         # TODO: Получить region_id из настроек пользователя (пока None = все регионы)
         region_id = None
         
-        # Загружаем торги
+        # Загружаем закупки
         try:
             tenders = self.tender_repo.get_new_tenders_223fz(
                 user_id=self.current_user_id,
                 user_okpd_codes=user_okpd_codes,
                 user_stop_words=user_stop_words,
                 region_id=region_id,
-                limit=1000  # Увеличено до 1000 торгов для отображения
+                category_id=category_id,
+                limit=1000  # Увеличено до 1000 закупок для отображения
             )
             # Извлекаем информацию о количестве из первого элемента
             total_count = None
@@ -275,14 +521,125 @@ class BidsWidget(QWidget):
                 total_count = tenders[0].pop('_total_count', len(tenders))
                 tenders[0].pop('_loaded_count', None)  # Удаляем служебное поле
             
-            logger.info(f"Отображаем торгов 223ФЗ: {len(tenders)} (всего в БД: {total_count})")
-            self.tenders_223fz_widget.set_tenders(tenders, total_count)
+            logger.info(f"Отображаем закупки 223ФЗ: {len(tenders)} (всего в БД: {total_count})")
+            
+            if force:
+                # Принудительное обновление - пересоздаем карточки
+                self.tenders_223fz_widget.set_tenders(tenders, total_count)
+            else:
+                # Обычная загрузка - обновляем существующие карточки или создаем новые
+                self.tenders_223fz_widget.update_tenders(tenders, total_count)
+            
             if self.document_search_service:
                 self.document_search_service.ensure_products_loaded()
         except Exception as e:
-            logger.error(f"Ошибка при загрузке торгов 223ФЗ: {e}")
+            logger.error(f"Ошибка при загрузке закупок 223ФЗ: {e}")
             self.tenders_223fz_widget.hide_loading()
-            QMessageBox.warning(self, "Ошибка", f"Не удалось загрузить торги:\n{e}")
+            QMessageBox.warning(self, "Ошибка", f"Не удалось загрузить закупки:\n{e}")
+    
+    def load_won_tenders_44fz(self, force: bool = False):
+        """Загрузка разыгранных закупок 44ФЗ"""
+        if not self.tender_repo:
+            logger.warning("Репозиторий закупок не инициализирован")
+            return
+        
+        # Показываем индикатор загрузки
+        self.won_tenders_44fz_widget.show_loading()
+        
+        # Получаем настройки пользователя
+        category_id = None
+        if hasattr(self, 'category_filter_combo') and self.category_filter_combo:
+            category_id = self.category_filter_combo.currentData()
+        
+        user_okpd_codes = None
+        if category_id is None:
+            user_okpd = self.tender_repo.get_user_okpd_codes(self.current_user_id)
+            user_okpd_codes = [okpd.get('okpd_code', '') for okpd in user_okpd if okpd.get('okpd_code')]
+        
+        user_stop_words_data = self.tender_repo.get_user_stop_words(self.current_user_id)
+        user_stop_words = [sw.get('stop_word', '') for sw in user_stop_words_data if sw.get('stop_word')]
+        
+        region_id = None
+        
+        try:
+            tenders = self.tender_repo.get_won_tenders_44fz(
+                user_id=self.current_user_id,
+                user_okpd_codes=user_okpd_codes,
+                user_stop_words=user_stop_words,
+                region_id=region_id,
+                category_id=category_id,
+                limit=1000
+            )
+            total_count = None
+            if tenders and '_total_count' in tenders[0]:
+                total_count = tenders[0].pop('_total_count', len(tenders))
+                tenders[0].pop('_loaded_count', None)
+            
+            logger.info(f"Отображаем разыгранные закупки 44ФЗ: {len(tenders)} (всего в БД: {total_count})")
+            
+            if force:
+                self.won_tenders_44fz_widget.set_tenders(tenders, total_count)
+            else:
+                self.won_tenders_44fz_widget.update_tenders(tenders, total_count)
+            
+            if self.document_search_service:
+                self.document_search_service.ensure_products_loaded()
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке разыгранных закупок 44ФЗ: {e}")
+            self.won_tenders_44fz_widget.hide_loading()
+            QMessageBox.warning(self, "Ошибка", f"Не удалось загрузить закупки:\n{e}")
+    
+    def load_won_tenders_223fz(self, force: bool = False):
+        """Загрузка разыгранных закупок 223ФЗ"""
+        if not self.tender_repo:
+            logger.warning("Репозиторий закупок не инициализирован")
+            return
+        
+        # Показываем индикатор загрузки
+        self.won_tenders_223fz_widget.show_loading()
+        
+        # Получаем настройки пользователя
+        category_id = None
+        if hasattr(self, 'category_filter_combo') and self.category_filter_combo:
+            category_id = self.category_filter_combo.currentData()
+        
+        user_okpd_codes = None
+        if category_id is None:
+            user_okpd = self.tender_repo.get_user_okpd_codes(self.current_user_id)
+            user_okpd_codes = [okpd.get('okpd_code', '') for okpd in user_okpd if okpd.get('okpd_code')]
+        
+        user_stop_words_data = self.tender_repo.get_user_stop_words(self.current_user_id)
+        user_stop_words = [sw.get('stop_word', '') for sw in user_stop_words_data if sw.get('stop_word')]
+        
+        region_id = None
+        
+        try:
+            tenders = self.tender_repo.get_won_tenders_223fz(
+                user_id=self.current_user_id,
+                user_okpd_codes=user_okpd_codes,
+                user_stop_words=user_stop_words,
+                region_id=region_id,
+                category_id=category_id,
+                limit=1000
+            )
+            total_count = None
+            if tenders and '_total_count' in tenders[0]:
+                total_count = tenders[0].pop('_total_count', len(tenders))
+                tenders[0].pop('_loaded_count', None)
+            
+            logger.info(f"Отображаем разыгранные закупки 223ФЗ: {len(tenders)} (всего в БД: {total_count})")
+            
+            if force:
+                self.won_tenders_223fz_widget.set_tenders(tenders, total_count)
+            else:
+                self.won_tenders_223fz_widget.update_tenders(tenders, total_count)
+            
+            if self.document_search_service:
+                self.document_search_service.ensure_products_loaded()
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке разыгранных закупок 223ФЗ: {e}")
+            self.won_tenders_223fz_widget.hide_loading()
+            QMessageBox.warning(self, "Ошибка", f"Не удалось загрузить закупки:\n{e}")
     
     def create_settings_tab(self) -> QWidget:
         """
@@ -315,9 +672,46 @@ class BidsWidget(QWidget):
         tab_layout.addWidget(scroll_area)
         
         # Заголовок
-        settings_label = QLabel("Настройки торгов")
+        settings_label = QLabel("Настройки закупок")
         apply_label_style(settings_label, 'h2')
         settings_layout.addWidget(settings_label)
+        
+        # === РАЗДЕЛ ВЫБОРА КАТЕГОРИИ ДЛЯ ФИЛЬТРАЦИИ ЗАКУПОК ===
+        filter_category_frame = QFrame()
+        apply_frame_style(filter_category_frame, 'content')
+        filter_category_layout = QVBoxLayout(filter_category_frame)
+        filter_category_layout.setContentsMargins(15, 15, 15, 15)
+        filter_category_layout.setSpacing(10)
+        
+        filter_category_title = QLabel("Фильтрация закупок по категории")
+        apply_label_style(filter_category_title, 'h3')
+        filter_category_layout.addWidget(filter_category_title)
+        
+        filter_category_info = QLabel("Выберите категорию ОКПД для фильтрации закупок. Будут показаны только закупки с ОКПД кодами из выбранной категории.")
+        apply_label_style(filter_category_info, 'small')
+        apply_text_style_light_italic(filter_category_info)
+        filter_category_info.setWordWrap(True)
+        filter_category_layout.addWidget(filter_category_info)
+        
+        category_filter_layout = QHBoxLayout()
+        category_filter_layout.setSpacing(10)
+        
+        category_filter_label = QLabel("Категория:")
+        apply_label_style(category_filter_label, 'normal')
+        category_filter_label.setMinimumWidth(80)
+        category_filter_layout.addWidget(category_filter_label)
+        
+        self.category_filter_combo = QComboBox()
+        self.category_filter_combo.setMinimumWidth(300)
+        apply_input_style(self.category_filter_combo)
+        self.category_filter_combo.addItem("Все категории", None)
+        self.category_filter_combo.currentIndexChanged.connect(self.on_category_filter_changed)
+        category_filter_layout.addWidget(self.category_filter_combo)
+        
+        category_filter_layout.addStretch()
+        filter_category_layout.addLayout(category_filter_layout)
+        
+        settings_layout.addWidget(filter_category_frame)
         
         # Раздел выбора ОКПД
         okpd_frame = QFrame()
@@ -396,6 +790,82 @@ class BidsWidget(QWidget):
         
         settings_layout.addWidget(okpd_frame)
         
+        # === РАЗДЕЛ УПРАВЛЕНИЯ КАТЕГОРИЯМИ ОКПД ===
+        categories_frame = QFrame()
+        apply_frame_style(categories_frame, 'content')
+        categories_layout = QVBoxLayout(categories_frame)
+        categories_layout.setContentsMargins(15, 15, 15, 15)
+        categories_layout.setSpacing(10)
+        
+        categories_title = QLabel("Категории ОКПД")
+        apply_label_style(categories_title, 'h3')
+        categories_layout.addWidget(categories_title)
+        
+        categories_info = QLabel("Создавайте категории для группировки ОКПД кодов (например: компьютеры, стройка, проекты). При выборе категории в поиске закупок будут отображаться только закупки с ОКПД кодами из этой категории.")
+        apply_label_style(categories_info, 'small')
+        apply_text_style_light_italic(categories_info)
+        categories_info.setWordWrap(True)
+        categories_layout.addWidget(categories_info)
+        
+        # Управление категориями
+        category_management_layout = QHBoxLayout()
+        category_management_layout.setSpacing(10)
+        
+        self.category_name_input = QLineEdit()
+        self.category_name_input.setPlaceholderText("Название категории (например: компьютеры)")
+        apply_input_style(self.category_name_input)
+        category_management_layout.addWidget(self.category_name_input)
+        
+        btn_create_category = QPushButton("Создать категорию")
+        apply_button_style(btn_create_category, 'primary')
+        btn_create_category.clicked.connect(self.handle_create_category)
+        category_management_layout.addWidget(btn_create_category)
+        
+        categories_layout.addLayout(category_management_layout)
+        
+        # Список категорий
+        categories_list_label = QLabel("Существующие категории:")
+        apply_label_style(categories_list_label, 'normal')
+        categories_layout.addWidget(categories_list_label)
+        
+        self.categories_list = QListWidget()
+        self.categories_list.setMinimumHeight(150)
+        self.categories_list.setMaximumHeight(300)
+        self.categories_list.setStyleSheet(f"""
+            QListWidget {{
+                border: 1px solid {COLORS['border']};
+                border-radius: {SIZES['border_radius_normal']}px;
+                background: {COLORS['white']};
+                padding: 5px;
+            }}
+            QListWidget::item {{
+                padding: 8px;
+                border-bottom: 1px solid {COLORS['border']};
+            }}
+            QListWidget::item:hover {{
+                background: {COLORS['secondary']};
+            }}
+            QListWidget::item:selected {{
+                background: {COLORS['primary']};
+                color: {COLORS['white']};
+            }}
+        """)
+        categories_layout.addWidget(self.categories_list)
+        
+        # Кнопки управления категорией
+        category_actions_layout = QHBoxLayout()
+        category_actions_layout.setSpacing(10)
+        
+        btn_delete_category = QPushButton("Удалить категорию")
+        apply_button_style(btn_delete_category, 'secondary')
+        btn_delete_category.clicked.connect(self.handle_delete_category)
+        category_actions_layout.addWidget(btn_delete_category)
+        
+        category_actions_layout.addStretch()
+        categories_layout.addLayout(category_actions_layout)
+        
+        settings_layout.addWidget(categories_frame)
+        
         # Раздел добавленных ОКПД
         added_frame = QFrame()
         apply_frame_style(added_frame, 'content')
@@ -440,7 +910,7 @@ class BidsWidget(QWidget):
         apply_label_style(stop_words_title, 'h3')
         stop_words_layout.addWidget(stop_words_title)
         
-        stop_words_info = QLabel("Стоп-слова используются для фильтрации торгов. Торги, содержащие стоп-слова, будут исключены из результатов.")
+        stop_words_info = QLabel("Стоп-слова используются для фильтрации закупок. Закупки, содержащие стоп-слова, будут исключены из результатов.")
         apply_label_style(stop_words_info, 'small')
         apply_text_style_light_italic(stop_words_info)
         stop_words_info.setWordWrap(True)
@@ -484,6 +954,27 @@ class BidsWidget(QWidget):
         
         settings_layout.addWidget(stop_words_frame)
         
+        # === КНОПКА ПОКАЗАТЬ ТЕНДЕРЫ ===
+        show_tenders_frame = QFrame()
+        apply_frame_style(show_tenders_frame, 'content')
+        show_tenders_layout = QVBoxLayout(show_tenders_frame)
+        show_tenders_layout.setContentsMargins(15, 15, 15, 15)
+        show_tenders_layout.setSpacing(10)
+        
+        show_tenders_info = QLabel("После настройки фильтров нажмите кнопку ниже, чтобы загрузить закупки по выбранным критериям.")
+        apply_label_style(show_tenders_info, 'small')
+        apply_text_style_light_italic(show_tenders_info)
+        show_tenders_info.setWordWrap(True)
+        show_tenders_layout.addWidget(show_tenders_info)
+        
+        btn_show_tenders = QPushButton("🔍 Показать тендеры")
+        apply_button_style(btn_show_tenders, 'primary')
+        btn_show_tenders.clicked.connect(self.handle_show_tenders)
+        btn_show_tenders.setMinimumHeight(50)
+        show_tenders_layout.addWidget(btn_show_tenders)
+        
+        settings_layout.addWidget(show_tenders_frame)
+        
         # Загружаем регионы после создания всех элементов
         # Отключаем сигнал при загрузке, чтобы избежать вызова on_region_changed
         try:
@@ -500,6 +991,9 @@ class BidsWidget(QWidget):
         # Загружаем все ОКПД при инициализации
         self.load_okpd_codes()
         
+        # Загружаем категории ОКПД
+        self.load_okpd_categories()
+        
         # Загружаем добавленные ОКПД пользователя
         self.load_user_okpd_codes()
         
@@ -511,7 +1005,7 @@ class BidsWidget(QWidget):
     def load_okpd_codes(self, search_text: Optional[str] = None):
         """Загрузка списка ОКПД кодов с учетом выбранного региона"""
         if not self.tender_repo:
-            logger.warning("Репозиторий торгов не инициализирован, ОКПД не загружены")
+            logger.warning("Репозиторий закупок не инициализирован, ОКПД не загружены")
             return
         
         if not hasattr(self, 'okpd_results_list') or self.okpd_results_list is None:
@@ -587,7 +1081,7 @@ class BidsWidget(QWidget):
             self.load_okpd_codes()
     
     def handle_add_okpd(self):
-        """Обработка добавления выбранного ОКПД"""
+        """Обработка добавления выбранного ОКПД с возможностью выбора категории"""
         if not self.tender_repo:
             QMessageBox.warning(self, "Ошибка", "Нет подключения к базе данных")
             return
@@ -606,18 +1100,99 @@ class BidsWidget(QWidget):
             QMessageBox.warning(self, "Ошибка", "Не удалось определить код ОКПД")
             return
         
-        # Добавляем в БД
-        success = self.tender_repo.add_user_okpd_code(
+        # Запрашиваем категорию (опционально)
+        category_id = None
+        categories = self.tender_repo.get_okpd_categories(self.current_user_id)
+        if categories:
+            from PyQt5.QtWidgets import QInputDialog
+            category_names = [cat.get('name', 'Без названия') for cat in categories]
+            category_names.insert(0, "Без категории")
+            
+            selected, ok = QInputDialog.getItem(
+                self,
+                "Выбор категории",
+                f"Выберите категорию для ОКПД кода {okpd_code}:",
+                category_names,
+                0,
+                False
+            )
+            
+            if ok and selected != "Без категории":
+                # Находим ID выбранной категории
+                for cat in categories:
+                    if cat.get('name') == selected:
+                        category_id = cat.get('id')
+                        break
+        
+        # Проверяем, существует ли уже этот код (для правильного сообщения)
+        from psycopg2.extras import RealDictCursor
+        
+        check_query = """
+            SELECT id, category_id FROM okpd_from_users 
+            WHERE user_id = %s AND okpd_code = %s
+        """
+        existing_check = self.tender_repo.db_manager.execute_query(
+            check_query,
+            (self.current_user_id, okpd_code),
+            RealDictCursor
+        )
+        
+        was_existing = bool(existing_check)
+        existing_category_id = existing_check[0].get('category_id') if existing_check else None
+        
+        # Добавляем код (или получаем существующий ID)
+        okpd_id = self.tender_repo.add_user_okpd_code(
             user_id=self.current_user_id,
             okpd_code=okpd_code,
             name=okpd_data.get('name')
         )
         
-        if success:
-            QMessageBox.information(self, "Успех", f"Код ОКПД {okpd_code} добавлен")
-            self.load_user_okpd_codes()  # Обновляем список добавленных
+        if not okpd_id:
+            QMessageBox.warning(self, "Ошибка", "Не удалось добавить код ОКПД")
+            return
+        
+        # Если выбрана категория, всегда привязываем/обновляем категорию
+        if category_id:
+            success = self.tender_repo.assign_okpd_to_category(
+                user_id=self.current_user_id,
+                okpd_id=okpd_id,
+                category_id=category_id
+            )
+            if success:
+                if was_existing:
+                    if existing_category_id == category_id:
+                        QMessageBox.information(
+                            self, 
+                            "Информация", 
+                            f"Код ОКПД {okpd_code} уже был добавлен с этой категорией."
+                        )
+                    else:
+                        QMessageBox.information(
+                            self, 
+                            "Успех", 
+                            f"Код ОКПД {okpd_code} уже был добавлен. Категория обновлена."
+                        )
+                else:
+                    QMessageBox.information(self, "Успех", f"Код ОКПД {okpd_code} добавлен и привязан к категории")
+            else:
+                QMessageBox.warning(
+                    self, 
+                    "Предупреждение", 
+                    f"Код ОКПД {okpd_code} {'добавлен' if not was_existing else 'уже был добавлен'}, но не удалось {'установить' if not was_existing else 'обновить'} категорию."
+                )
         else:
-            QMessageBox.warning(self, "Предупреждение", "Код ОКПД уже был добавлен ранее")
+            # Категория не выбрана
+            if was_existing:
+                QMessageBox.information(
+                    self, 
+                    "Информация", 
+                    f"Код ОКПД {okpd_code} уже был добавлен ранее."
+                )
+            else:
+                QMessageBox.information(self, "Успех", f"Код ОКПД {okpd_code} добавлен")
+        
+        # Обновляем список добавленных ОКПД
+        self.load_user_okpd_codes()
     
     def load_user_okpd_codes(self):
         """Загрузка и отображение добавленных ОКПД пользователя"""
@@ -712,7 +1287,7 @@ class BidsWidget(QWidget):
     def load_regions(self):
         """Загрузка списка регионов в выпадающий список"""
         if not self.tender_repo:
-            logger.warning("Репозиторий торгов не инициализирован, регионы не загружены")
+            logger.warning("Репозиторий закупок не инициализирован, регионы не загружены")
             return
         
         try:
@@ -896,3 +1471,408 @@ class BidsWidget(QWidget):
             if success:
                 QMessageBox.information(self, "Успех", "Стоп-слово удалено")
                 self.load_user_stop_words()  # Обновляем список
+    
+    # ========== МЕТОДЫ ДЛЯ РАБОТЫ С КАТЕГОРИЯМИ ОКПД ==========
+    
+    def load_okpd_categories(self):
+        """Загрузка и отображение категорий ОКПД пользователя"""
+        if not self.tender_repo:
+            return
+        
+        try:
+            categories = self.tender_repo.get_okpd_categories(self.current_user_id)
+            
+            # Загружаем в список категорий
+            if hasattr(self, 'categories_list'):
+                self.categories_list.clear()
+                for category in categories:
+                    category_name = category.get('name', 'Без названия')
+                    category_id = category.get('id')
+                    item_text = f"{category_name}"
+                    if category.get('description'):
+                        item_text += f" - {category.get('description')[:50]}"
+                    
+                    item = QListWidgetItem(item_text)
+                    item.setData(Qt.UserRole, category)
+                    self.categories_list.addItem(item)
+            
+            # Загружаем в комбобокс фильтра
+            if hasattr(self, 'category_filter_combo'):
+                current_data = self.category_filter_combo.currentData()
+                self.category_filter_combo.clear()
+                self.category_filter_combo.addItem("Все категории", None)
+                for category in categories:
+                    category_name = category.get('name', 'Без названия')
+                    category_id = category.get('id')
+                    self.category_filter_combo.addItem(category_name, category_id)
+                
+                # Восстанавливаем выбранную категорию
+                if current_data is not None:
+                    for i in range(self.category_filter_combo.count()):
+                        if self.category_filter_combo.itemData(i) == current_data:
+                            self.category_filter_combo.setCurrentIndex(i)
+                            break
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке категорий ОКПД: {e}")
+    
+    def on_category_filter_changed(self, index: int):
+        """Обработка изменения выбранной категории для фильтрации"""
+        # Автоматически обновляем закупки при изменении категории
+        if hasattr(self, 'tabs') and self.tabs:
+            current_index = self.tabs.currentIndex()
+            if current_index == 0:  # Вкладка "Новые закупки 44ФЗ"
+                self.load_tenders_44fz(force=True)
+            elif current_index == 1:  # Вкладка "Новые закупки 223ФЗ"
+                self.load_tenders_223fz(force=True)
+            elif current_index == 2 and hasattr(self, 'won_tenders_44fz_widget'):
+                self.load_won_tenders_44fz(force=True)
+            elif current_index == 3 and hasattr(self, 'won_tenders_223fz_widget'):
+                self.load_won_tenders_223fz(force=True)
+    
+    def handle_create_category(self):
+        """Обработка создания новой категории ОКПД"""
+        if not self.tender_repo:
+            QMessageBox.warning(self, "Ошибка", "Нет подключения к базе данных")
+            return
+        
+        category_name = self.category_name_input.text().strip()
+        if not category_name:
+            QMessageBox.warning(self, "Предупреждение", "Введите название категории")
+            return
+        
+        category_id = self.tender_repo.create_okpd_category(
+            user_id=self.current_user_id,
+            name=category_name
+        )
+        
+        if category_id:
+            QMessageBox.information(self, "Успех", f"Категория '{category_name}' создана")
+            self.category_name_input.clear()
+            self.load_okpd_categories()
+        else:
+            QMessageBox.warning(self, "Ошибка", "Не удалось создать категорию")
+    
+    def handle_delete_category(self):
+        """Обработка удаления категории ОКПД"""
+        if not self.tender_repo:
+            QMessageBox.warning(self, "Ошибка", "Нет подключения к базе данных")
+            return
+        
+        current_item = self.categories_list.currentItem()
+        if not current_item:
+            QMessageBox.warning(self, "Предупреждение", "Выберите категорию для удаления")
+            return
+        
+        category_data = current_item.data(Qt.UserRole)
+        if not category_data:
+            return
+        
+        category_id = category_data.get('id')
+        category_name = category_data.get('name', 'категория')
+        
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение",
+            f"Вы уверены, что хотите удалить категорию '{category_name}'?\n\nОКПД коды из этой категории останутся, но будут отвязаны от категории.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            success = self.tender_repo.delete_okpd_category(category_id, self.current_user_id)
+            if success:
+                QMessageBox.information(self, "Успех", f"Категория '{category_name}' удалена")
+                self.load_okpd_categories()
+                self.load_user_okpd_codes()  # Обновляем список ОКПД, чтобы показать изменения
+    
+    def handle_show_tenders(self):
+        """Обработка нажатия кнопки 'Показать тендеры'"""
+        # Переключаемся на первую вкладку с закупками
+        self.tabs.setCurrentIndex(0)  # Вкладка "Новые закупки 44ФЗ"
+        # Загружаем закупки 44ФЗ
+        self.load_tenders_44fz(force=True)
+        # Переключаемся на вторую вкладку и загружаем 223ФЗ
+        self.tabs.setCurrentIndex(1)  # Вкладка "Новые закупки 223ФЗ"
+        self.load_tenders_223fz(force=True)
+        # Загружаем разыгранные закупки 44ФЗ
+        if hasattr(self, 'won_tenders_44fz_widget'):
+            self.tabs.setCurrentIndex(2)
+            self.load_won_tenders_44fz(force=True)
+        # Загружаем разыгранные закупки 223ФЗ
+        if hasattr(self, 'won_tenders_223fz_widget'):
+            self.tabs.setCurrentIndex(3)
+            self.load_won_tenders_223fz(force=True)
+        # Возвращаемся на первую вкладку
+        self.tabs.setCurrentIndex(0)
+        QMessageBox.information(self, "Успех", "Закупки загружены по выбранным критериям")
+    
+    def on_tender_selection_changed(self):
+        """Обработка изменения выбора закупок"""
+        # Подсчитываем выбранные закупки из всех виджетов
+        selected_44fz = self.tenders_44fz_widget.get_selected_tenders() if hasattr(self.tenders_44fz_widget, 'get_selected_tenders') else []
+        selected_223fz = self.tenders_223fz_widget.get_selected_tenders() if hasattr(self.tenders_223fz_widget, 'get_selected_tenders') else []
+        
+        # Добавляем выбранные из разыгранных контрактов
+        if hasattr(self, 'won_tenders_44fz_widget'):
+            selected_44fz.extend(self.won_tenders_44fz_widget.get_selected_tenders() if hasattr(self.won_tenders_44fz_widget, 'get_selected_tenders') else [])
+        if hasattr(self, 'won_tenders_223fz_widget'):
+            selected_223fz.extend(self.won_tenders_223fz_widget.get_selected_tenders() if hasattr(self.won_tenders_223fz_widget, 'get_selected_tenders') else [])
+        
+        total_selected = len(selected_44fz) + len(selected_223fz)
+        
+        # Включаем/выключаем кнопку анализа
+        if hasattr(self, 'analyze_button'):
+            self.analyze_button.setEnabled(total_selected > 0)
+            if total_selected > 0:
+                self.analyze_button.setText(f"📄 Анализ выбранных ({total_selected})")
+            else:
+                self.analyze_button.setText("📄 Анализ выбранных")
+    
+    def handle_analyze_selected_tenders(self):
+        """Обработка нажатия кнопки 'Анализ документации'"""
+        # Определяем текущую вкладку
+        current_index = self.tabs.currentIndex()
+        tab_text = self.tabs.tabText(current_index)
+        
+        # Получаем выбранные закупки из текущей вкладки
+        selected_44fz = []
+        selected_223fz = []
+        
+        if tab_text == "Новые закупки 44ФЗ":
+            selected_44fz = self.tenders_44fz_widget.get_selected_tenders() if hasattr(self.tenders_44fz_widget, 'get_selected_tenders') else []
+        elif tab_text == "Новые закупки 223ФЗ":
+            selected_223fz = self.tenders_223fz_widget.get_selected_tenders() if hasattr(self.tenders_223fz_widget, 'get_selected_tenders') else []
+        elif tab_text == "Разыгранные закупки 44ФЗ":
+            selected_44fz = self.won_tenders_44fz_widget.get_selected_tenders() if hasattr(self.won_tenders_44fz_widget, 'get_selected_tenders') else []
+        elif tab_text == "Разыгранные закупки 223ФЗ":
+            selected_223fz = self.won_tenders_223fz_widget.get_selected_tenders() if hasattr(self.won_tenders_223fz_widget, 'get_selected_tenders') else []
+        else:
+            # Для других вкладок получаем из всех виджетов
+            selected_44fz = self.tenders_44fz_widget.get_selected_tenders() if hasattr(self.tenders_44fz_widget, 'get_selected_tenders') else []
+            selected_223fz = self.tenders_223fz_widget.get_selected_tenders() if hasattr(self.tenders_223fz_widget, 'get_selected_tenders') else []
+            if hasattr(self, 'won_tenders_44fz_widget'):
+                selected_44fz.extend(self.won_tenders_44fz_widget.get_selected_tenders() if hasattr(self.won_tenders_44fz_widget, 'get_selected_tenders') else [])
+            if hasattr(self, 'won_tenders_223fz_widget'):
+                selected_223fz.extend(self.won_tenders_223fz_widget.get_selected_tenders() if hasattr(self.won_tenders_223fz_widget, 'get_selected_tenders') else [])
+        
+        if not selected_44fz and not selected_223fz:
+            QMessageBox.warning(self, "Предупреждение", "Выберите хотя бы одну закупку для анализа")
+            return
+        
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение",
+            f"Запустить анализ документации для {len(selected_44fz) + len(selected_223fz)} выбранных закупок?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # Запускаем обработку документов для выбранных закупок
+            self._run_document_processing_for_selected(selected_44fz, selected_223fz)
+    
+    def handle_analyze_all_tenders(self):
+        """Обработка нажатия кнопки 'Анализировать все'"""
+        # Определяем текущую вкладку
+        current_index = self.tabs.currentIndex()
+        tab_text = self.tabs.tabText(current_index)
+        
+        # Получаем приоритетные (выбранные) закупки только из текущей вкладки
+        priority_44fz = []
+        priority_223fz = []
+        
+        if tab_text == "Новые закупки 44ФЗ":
+            priority_44fz = self.tenders_44fz_widget.get_selected_tenders() if hasattr(self.tenders_44fz_widget, 'get_selected_tenders') else []
+            registry_type = '44fz'
+        elif tab_text == "Новые закупки 223ФЗ":
+            priority_223fz = self.tenders_223fz_widget.get_selected_tenders() if hasattr(self.tenders_223fz_widget, 'get_selected_tenders') else []
+            registry_type = '223fz'
+        elif tab_text == "Разыгранные закупки 44ФЗ":
+            priority_44fz = self.won_tenders_44fz_widget.get_selected_tenders() if hasattr(self.won_tenders_44fz_widget, 'get_selected_tenders') else []
+            registry_type = '44fz'
+        elif tab_text == "Разыгранные закупки 223ФЗ":
+            priority_223fz = self.won_tenders_223fz_widget.get_selected_tenders() if hasattr(self.won_tenders_223fz_widget, 'get_selected_tenders') else []
+            registry_type = '223fz'
+        else:
+            # Для других вкладок используем обе
+            priority_44fz = self.tenders_44fz_widget.get_selected_tenders() if hasattr(self.tenders_44fz_widget, 'get_selected_tenders') else []
+            priority_223fz = self.tenders_223fz_widget.get_selected_tenders() if hasattr(self.tenders_223fz_widget, 'get_selected_tenders') else []
+            if hasattr(self, 'won_tenders_44fz_widget'):
+                priority_44fz.extend(self.won_tenders_44fz_widget.get_selected_tenders() if hasattr(self.won_tenders_44fz_widget, 'get_selected_tenders') else [])
+            if hasattr(self, 'won_tenders_223fz_widget'):
+                priority_223fz.extend(self.won_tenders_223fz_widget.get_selected_tenders() if hasattr(self.won_tenders_223fz_widget, 'get_selected_tenders') else [])
+            registry_type = None
+        
+        priority_count = len(priority_44fz) + len(priority_223fz)
+        
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение",
+            f"Запустить анализ документации для всех закупок{' ' + tab_text if registry_type else ''}?\n\n"
+            f"Приоритетных (выбранных): {priority_count}\n"
+            f"Приоритетные закупки будут обработаны первыми.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # Запускаем обработку всех закупок с учетом приоритетных и типа реестра
+            self._run_document_processing_for_all(priority_44fz, priority_223fz, registry_type=registry_type)
+    
+    def _run_document_processing_for_selected(self, selected_44fz: List[Dict[str, Any]], selected_223fz: List[Dict[str, Any]]):
+        """Запуск обработки документов для выбранных закупок"""
+        try:
+            import subprocess
+            import sys
+            from pathlib import Path
+            
+            # Формируем список ID выбранных закупок
+            tender_ids_44fz = [t.get('id') for t in selected_44fz if t.get('id')]
+            tender_ids_223fz = [t.get('id') for t in selected_223fz if t.get('id')]
+            
+            if not tender_ids_44fz and not tender_ids_223fz:
+                QMessageBox.warning(self, "Ошибка", "Не удалось определить ID выбранных закупок")
+                return
+            
+            # Формируем строку аргументов для скрипта
+            tenders_arg_parts = []
+            if tender_ids_44fz:
+                ids_str = ','.join(map(str, tender_ids_44fz))
+                tenders_arg_parts.append(f"44fz:{ids_str}")
+            if tender_ids_223fz:
+                ids_str = ','.join(map(str, tender_ids_223fz))
+                tenders_arg_parts.append(f"223fz:{ids_str}")
+            
+            tenders_arg = ' '.join(tenders_arg_parts)
+            
+            # Запускаем скрипт обработки документов
+            script_path = Path(__file__).parent.parent.parent / "scripts" / "run_document_processing.py"
+            
+            if not script_path.exists():
+                QMessageBox.critical(
+                    self,
+                    "Ошибка",
+                    f"Скрипт обработки документов не найден:\n{script_path}"
+                )
+                return
+            
+            # Запускаем скрипт с аргументами
+            cmd = [sys.executable, str(script_path), '--tenders', tenders_arg, '--user-id', str(self.current_user_id)]
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,  # Объединяем stderr с stdout
+                text=True,
+                encoding='utf-8',  # Явно указываем UTF-8 для корректной обработки русских символов
+                errors='replace',  # Заменяем проблемные символы вместо ошибки
+                bufsize=1,  # Буферизация построчная
+                universal_newlines=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+            )
+            
+            # Открываем диалог с выводом консоли
+            dialog = ProcessOutputDialog(
+                self,
+                f"Анализ документации ({len(tender_ids_44fz) + len(tender_ids_223fz)} закупок)"
+            )
+            dialog.start_process(process)
+            dialog.show()
+            
+            logger.info(f"Запущена обработка документов для {len(tender_ids_44fz) + len(tender_ids_223fz)} закупок")
+            logger.info(f"Команда: {' '.join(cmd)}")
+            
+        except Exception as error:
+            logger.error(f"Ошибка при запуске обработки документов: {error}")
+            logger.exception("Детали ошибки:")
+            QMessageBox.critical(self, "Ошибка", f"Не удалось запустить анализ документации:\n{error}")
+    
+    def _run_document_processing_for_all(self, priority_44fz: List[Dict[str, Any]], priority_223fz: List[Dict[str, Any]], registry_type: Optional[str] = None):
+        """
+        Запуск обработки документов для всех закупок с учетом приоритетных
+        
+        Args:
+            priority_44fz: Приоритетные закупки 44ФЗ
+            priority_223fz: Приоритетные закупки 223ФЗ
+            registry_type: Тип реестра для анализа ('44fz', '223fz' или None для обоих)
+        """
+        try:
+            import subprocess
+            import sys
+            from pathlib import Path
+            
+            # Запускаем скрипт обработки документов БЕЗ конкретных ID
+            # Скрипт сам получит все закупки по настройкам пользователя
+            # Но мы передадим приоритетные, чтобы они обрабатывались первыми
+            # Путь к скрипту: modules/bids/widget.py -> корень проекта -> scripts/run_document_processing.py
+            script_path = Path(__file__).parent.parent.parent / "scripts" / "run_document_processing.py"
+            
+            if not script_path.exists():
+                QMessageBox.critical(
+                    self,
+                    "Ошибка",
+                    f"Скрипт обработки документов не найден:\n{script_path}"
+                )
+                return
+            
+            # Формируем список приоритетных ID для передачи в скрипт
+            priority_tender_ids = []
+            if priority_44fz:
+                for t in priority_44fz:
+                    if t.get('id'):
+                        priority_tender_ids.append({'id': t.get('id'), 'registry_type': '44fz'})
+            if priority_223fz:
+                for t in priority_223fz:
+                    if t.get('id'):
+                        priority_tender_ids.append({'id': t.get('id'), 'registry_type': '223fz'})
+            
+            # Если есть приоритетные, передаем их отдельно
+            # Скрипт должен обработать сначала приоритетные, затем все остальные
+            if priority_tender_ids:
+                # Формируем строку аргументов для приоритетных
+                tenders_arg_parts = []
+                ids_44fz = [t['id'] for t in priority_tender_ids if t.get('registry_type') == '44fz']
+                ids_223fz = [t['id'] for t in priority_tender_ids if t.get('registry_type') == '223fz']
+                
+                if ids_44fz:
+                    ids_str = ','.join(map(str, ids_44fz))
+                    tenders_arg_parts.append(f"44fz:{ids_str}")
+                if ids_223fz:
+                    ids_str = ','.join(map(str, ids_223fz))
+                    tenders_arg_parts.append(f"223fz:{ids_str}")
+                
+                tenders_arg = ' '.join(tenders_arg_parts)
+                
+                # Запускаем скрипт с приоритетными тендерами
+                # Скрипт должен сначала обработать их, затем получить все остальные
+                cmd = [sys.executable, str(script_path), '--tenders', tenders_arg, '--user-id', str(self.current_user_id), '--all-after-priority']
+                if registry_type:
+                    cmd.extend(['--registry-type', registry_type])
+                dialog_title = f"Анализ всех закупок (приоритетных: {len(priority_tender_ids)})"
+            else:
+                # Нет приоритетных - просто запускаем обработку всех
+                cmd = [sys.executable, str(script_path), '--user-id', str(self.current_user_id)]
+                if registry_type:
+                    cmd.extend(['--registry-type', registry_type])
+                dialog_title = "Анализ всех закупок"
+            
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,  # Объединяем stderr с stdout
+                text=True,
+                encoding='utf-8',  # Явно указываем UTF-8 для корректной обработки русских символов
+                errors='replace',  # Заменяем проблемные символы вместо ошибки
+                bufsize=1,  # Буферизация построчная
+                universal_newlines=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+            )
+            
+            # Открываем диалог с выводом консоли
+            dialog = ProcessOutputDialog(self, dialog_title)
+            dialog.start_process(process)
+            dialog.show()
+            
+            logger.info(f"Запущена обработка документов для всех закупок (приоритетных: {len(priority_tender_ids)})")
+            logger.info(f"Команда: {' '.join(cmd)}")
+            
+        except Exception as error:
+            logger.error(f"Ошибка при запуске обработки документов: {error}")
+            logger.exception("Детали ошибки:")
+            QMessageBox.critical(self, "Ошибка", f"Не удалось запустить анализ документации:\n{error}")

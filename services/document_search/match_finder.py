@@ -30,6 +30,7 @@ class MatchFinder:
         self.product_names = product_names
         self._product_patterns: Optional[Dict[str, Dict[str, Any]]] = None
         self._excel_parser = ExcelParser()
+        self._additional_phrases: Optional[List[str]] = None
 
     def search_workbook_for_products(self, file_path: Path) -> List[Dict[str, Any]]:
         """Парсинг Excel и поиск совпадений с названиями товаров по ключевым словам."""
@@ -77,6 +78,15 @@ class MatchFinder:
                 cell_info["row"]
             )
             
+            # Получаем полную строку с контекстом
+            full_row_context = self._excel_parser.extract_full_row_with_context(
+                file_path,
+                cell_info["sheet_name"],
+                cell_info["row"],
+                cell_info["column"],
+                context_cols=3
+            )
+            
             found_matches[best_product] = {
                 "product_name": best_product,
                 "score": best_match["score"],
@@ -88,10 +98,242 @@ class MatchFinder:
                 "cell_address": cell_info["cell_address"],
                 "matched_keywords": best_match["matched_keywords"],
                 "row_data": row_data,
+                "full_row": full_row_context.get("full_row", []),
+                "left_context": full_row_context.get("left_context", []),
+                "right_context": full_row_context.get("right_context", []),
+                "column_names": full_row_context.get("column_names", {}),
             }
 
-        sorted_matches = sorted(found_matches.values(), key=lambda item: item["score"], reverse=True)
+        # Фильтруем только совпадения с оценкой >= 85 (100% и 85%)
+        filtered_matches = [
+            match for match in found_matches.values()
+            if match.get("score", 0) >= 85.0
+        ]
+        
+        sorted_matches = sorted(filtered_matches, key=lambda item: item["score"], reverse=True)
+        
+        # Освобождаем память после обработки файла
+        import gc
+        gc.collect()
+        
         return sorted_matches[:50]
+
+    def _get_additional_search_phrases(self) -> List[str]:
+        """
+        Генерация дополнительных фраз для поиска по документации.
+        
+        Returns:
+            Список фраз для поиска (в нижнем регистре)
+        """
+        if self._additional_phrases is not None:
+            return self._additional_phrases
+        
+        phrases = []
+        
+        # 1. Композитные перильные ограждения - вариации
+        composite_railing_phrases = [
+            "композитное перильное ограждение",
+            "композитные перильные ограждения",
+            "перильное ограждение композитное",
+            "перильные ограждения композитные",
+            "перильные ограждения из композита",
+            "перильное ограждение из композита",
+            "композитное ограждение перильное",
+            "композитные ограждения перильные",
+            "стеклопластиковые перильные ограждения",
+            "перильные ограждения стеклопластиковые",
+            "перильные ограждения из стеклопластика",
+            "перильное ограждение из стеклопластика",
+            "стеклопластиковое перильное ограждение",
+            "перильное ограждение стеклопластиковое",
+            "перильные ограждения композит",
+            "перильное ограждение композит",
+            "композит перильные ограждения",
+            "композит перильное ограждение",
+        ]
+        phrases.extend(composite_railing_phrases)
+        
+        # 2. Система внешнего армирования - вариации
+        external_reinforcement_phrases = [
+            "система внешнего армирования",
+            "внешнее армирование",
+            "армирование внешнее",
+            "система армирования внешнего",
+            "усиление углеволокном",
+            "армирование углеволокном",
+            "углеволокно для армирования",
+            "армирование углеродным волокном",
+            "усиление углеродным волокном",
+            "fibarm",
+            "carbonwrap",
+            "monsterlot",
+            "sika",
+            "mapei",
+        ]
+        phrases.extend(external_reinforcement_phrases)
+        
+        # 3. Композитные водоотводные лотки - вариации
+        composite_drainage_phrases = [
+            "композитные водоотводные лотки",
+            "водоотводные лотки композитные",
+            "композитный водоотводный лоток",
+            "водоотводный лоток композитный",
+            "лотки водоотводные композитные",
+            "лоток водоотводный композитный",
+            "подвесные водоотводные лотки композитные",
+            "композитные подвесные водоотводные лотки",
+            "водоотводные лотки подвесные композитные",
+            "подвесные композитные водоотводные лотки",
+            "стеклопластиковые водоотводные лотки",
+            "водоотводные лотки стеклопластиковые",
+            "стеклопластиковый водоотводный лоток",
+            "водоотводный лоток стеклопластиковый",
+            "полимерные водоотводные лотки",
+            "водоотводные лотки полимерные",
+            "полимерный водоотводный лоток",
+            "водоотводный лоток полимерный",
+            "композитные лотки водоотводные",
+            "композитный лоток водоотводный",
+            "водоотводные лотки из композита",
+            "водоотводный лоток из композита",
+            "лотки из композита водоотводные",
+            "лоток из композита водоотводный",
+        ]
+        phrases.extend(composite_drainage_phrases)
+
+        # 4. Инъектирование и гидроизоляция - вариации
+        injection_phrases = [
+            "инъектирование",
+            "иньектирование",
+            "инъектировать",
+            "инъекционные работы",
+            "инъекционная гидроизоляция",
+            "инъекционное заполнение",
+            "инъекционная система",
+            "гидроизоляция",
+            "гидроизоляции",
+            "гидроизоляционные работы",
+            "гидроизоляционные материалы",
+            "гидроизоляционные системы",
+            "гидроизоляционный состав",
+            "гидроизоляционные решения",
+        ]
+        phrases.extend(injection_phrases)
+
+        # 5. Наливные полы - вариации
+        self_leveling_phrases = [
+            "наливные полы",
+            "наливных полов",
+            "наливной пол",
+            "наливного пола",
+            "наливные покрытия",
+            "наливное покрытие",
+            "наливной состав",
+            "наливные смеси",
+        ]
+        phrases.extend(self_leveling_phrases)
+
+        # 6. Промышленные полы - вариации
+        industrial_floor_phrases = [
+            "промышленные полы",
+            "промышленных полов",
+            "промышленный пол",
+            "промышленного пола",
+            "промышленные покрытия",
+            "промышленное покрытие",
+        ]
+        phrases.extend(industrial_floor_phrases)
+
+        # 7. Усиление конструкций - вариации
+        reinforcement_phrases = [
+            "усиление конструкций",
+            "усиление конструкции",
+            "усиление несущих конструкций",
+            "усиление железобетонных конструкций",
+            "усиление железобетонной конструкции",
+            "усиление жб конструкций",
+            "усиление жб конструкции",
+            "усиление зданий",
+            "усиление сооружений",
+        ]
+        phrases.extend(reinforcement_phrases)
+        
+        # Нормализуем все фразы (нижний регистр, убираем лишние пробелы)
+        normalized_phrases = []
+        for phrase in phrases:
+            normalized = re.sub(r'\s+', ' ', phrase.strip().casefold())
+            if normalized:
+                normalized_phrases.append(normalized)
+        
+        self._additional_phrases = normalized_phrases
+        logger.debug(f"Сгенерировано {len(normalized_phrases)} дополнительных фраз для поиска")
+        return normalized_phrases
+
+    def search_additional_phrases(self, file_path: Path) -> List[Dict[str, Any]]:
+        """
+        Поиск дополнительных фраз в документах.
+        
+        Args:
+            file_path: Путь к Excel файлу
+            
+        Returns:
+            Список найденных совпадений с дополнительными фразами
+        """
+        phrases = self._get_additional_search_phrases()
+        if not phrases:
+            return []
+        
+        found_matches: Dict[str, Dict[str, Any]] = {}
+        
+        for cell_info in self._excel_parser.iter_workbook_cells(file_path):
+            text = cell_info["text"]
+            text_lower = text.casefold()
+            
+            # Ищем каждую фразу в тексте
+            for phrase in phrases:
+                if phrase in text_lower:
+                    # Если фраза найдена, создаем совпадение
+                    product_name = phrase  # Используем саму фразу как название
+                    
+                    existing = found_matches.get(product_name)
+                    if existing:
+                        # Если уже есть совпадение, проверяем оценку
+                        if existing.get("score", 0) >= 85.0:
+                            continue
+                    
+                    row_data = self._excel_parser.extract_row_data(
+                        file_path,
+                        cell_info["sheet_name"],
+                        cell_info["row"]
+                    )
+                    
+                    full_row_context = self._excel_parser.extract_full_row_with_context(
+                        file_path,
+                        cell_info["sheet_name"],
+                        cell_info["row"],
+                        cell_info["column"],
+                        context_cols=3
+                    )
+                    
+                    found_matches[product_name] = {
+                        "product_name": product_name,
+                        "score": 85.0,  # Фиксированная оценка для дополнительных фраз
+                        "matched_text": text,
+                        "matched_display_text": cell_info["display_text"],
+                        "sheet_name": cell_info["sheet_name"],
+                        "row": cell_info["row"],
+                        "column": cell_info["column"],
+                        "cell_address": cell_info["cell_address"],
+                        "matched_keywords": [phrase],
+                        "row_data": row_data,
+                        "full_row": full_row_context.get("full_row", []),
+                        "left_context": full_row_context.get("left_context", []),
+                        "right_context": full_row_context.get("right_context", []),
+                        "column_names": full_row_context.get("column_names", {}),
+                        "is_additional_phrase": True,  # Флаг, что это дополнительная фраза
+                    }
+        
+        return list(found_matches.values())
 
     def _prepare_product_patterns(self) -> None:
         """Подготовка паттернов поиска для каждого товара."""

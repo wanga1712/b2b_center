@@ -1,8 +1,8 @@
 """
-Канбан-доска для управления торгами
+Канбан-доска для управления закупками
 
 Реализует функциональность drag-and-drop для перемещения карточек
-между этапами торгов (как в Trello).
+между этапами закупок (как в Trello).
 """
 
 from PyQt5.QtWidgets import (
@@ -19,7 +19,7 @@ from modules.styles.general_styles import (
     apply_label_style, apply_frame_style, COLORS, FONT_SIZES, SIZES
 )
 
-# Импортируем карточку торгов
+# Импортируем карточку закупок
 from modules.bids.bid_card import BidCard
 
 
@@ -27,7 +27,7 @@ class KanbanColumn(QFrame):
     """
     Колонка канбан-доски
     
-    Содержит заголовок этапа и список карточек торгов.
+    Содержит заголовок этапа и список карточек закупок.
     Поддерживает drag-and-drop для перемещения карточек.
     """
     
@@ -188,7 +188,7 @@ class KanbanColumn(QFrame):
 
 class KanbanBoard(QWidget):
     """
-    Канбан-доска для управления торгами
+    Канбан-доска для управления закупками
     
     Содержит несколько колонок (этапов) и поддерживает
     drag-and-drop для перемещения карточек между колонками.
@@ -262,7 +262,7 @@ class KanbanBoard(QWidget):
         Добавление карточки в указанный этап
         
         Args:
-            card: Карточка торгов
+            card: Карточка закупок
             stage_name: Название этапа
         """
         for column in self.columns:
@@ -277,7 +277,7 @@ class KanbanBoard(QWidget):
         Перемещение карточки между этапами
         
         Args:
-            card: Карточка торгов
+            card: Карточка закупок
             from_stage: Исходный этап
             to_stage: Целевой этап
         """

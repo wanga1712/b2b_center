@@ -70,13 +70,12 @@ class Config:
         self.ui = self._load_ui_config()
         self.app = self._load_app_config()
         # Пути к инструментам и директориям (настраиваются через .env)
-        default_unrar_tool = r"C:\Program Files\WinRAR\UnRAR.exe"
         # По умолчанию используется домашняя директория пользователя
         from pathlib import Path
         default_download_dir = str(Path.home() / "Downloads" / "ЕИС_Документация")
-        self.unrar_tool = self._get_env_var("UNRAR_TOOL", default_unrar_tool)
+        self.unrar_tool = self._get_env_var("UNRAR_TOOL", None)
         self.document_download_dir = self._get_env_var("DOCUMENT_DOWNLOAD_DIR", default_download_dir)
-        self.winrar_path = self._get_env_var("WINRAR_PATH", r"C:\Program Files\WinRAR")
+        self.winrar_path = self._get_env_var("WINRAR_PATH", None)
 
         self._configure_external_tools()
         logger.info("Конфигурация успешно загружена")

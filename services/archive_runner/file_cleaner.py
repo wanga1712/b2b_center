@@ -1,0 +1,325 @@
+"""
+Модуль для очистки файлов после обработки.
+
+Удаляет:
+- Архивы после распаковки
+- Excel файлы после записи в БД
+- При ошибке - файлы не удаляются
+"""
+
+import time
+import os
+from pathlib import Path
+from typing import Sequence, Optional, List
+from loguru import logger
+
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    logger.warning("Библиотека psutil не установлена. Определение процессов, блокирующих файлы, будет недоступно.")
+
+
+class FileCleaner:
+    """Класс для очистки файлов после обработки."""
+    
+    ARCHIVE_EXTENSIONS = {'.rar', '.zip', '.7z'}
+    EXCEL_EXTENSIONS = {'.xlsx', '.xls'}
+    
+    def cleanup_archives_after_extraction(
+        self,
+        archive_paths: Sequence[Path],
+        success: bool = True,
+    ) -> None:
+        """
+        Удаляет архивы после успешной распаковки.
+        
+        Args:
+            archive_paths: Пути к архивным файлам
+            success: True если распаковка успешна, False при ошибке
+            
+        Note:
+            Метод не бросает исключения - ошибки удаления логируются.
+        """
+        if not success:
+            logger.info("Ошибка при распаковке, архивы не удаляются")
+            return
+        
+        for archive_path in archive_paths:
+            if not archive_path.exists():
+                continue
+            
+            suffix = archive_path.suffix.lower()
+            if suffix not in self.ARCHIVE_EXTENSIONS:
+                continue
+            
+            try:
+                if self._remove_file_with_retry(archive_path):
+                    logger.debug(f"Удален архив после распаковки: {archive_path.name}")
+            except Exception as error:
+                logger.warning(f"Не удалось удалить архив {archive_path.name}: {error}")
+    
+    def cleanup_excel_after_save(
+        self,
+        excel_paths: Sequence[Path],
+        success: bool = True,
+    ) -> None:
+        """
+        Удаляет Excel файлы после успешной записи в БД.
+        
+        Args:
+            excel_paths: Пути к Excel файлам
+            success: True если запись в БД успешна, False при ошибке
+            
+        Note:
+            Метод не бросает исключения - ошибки удаления логируются.
+        """
+        if not success:
+            logger.info("Ошибка при записи в БД, файлы не удаляются")
+            return
+        
+        for excel_path in excel_paths:
+            if not excel_path.exists():
+                continue
+            
+            suffix = excel_path.suffix.lower()
+            if suffix not in self.EXCEL_EXTENSIONS:
+                continue
+            
+            try:
+                if self._remove_file_with_retry(excel_path):
+                    logger.debug(f"Удален Excel файл после записи в БД: {excel_path.name}")
+            except Exception as error:
+                logger.warning(f"Не удалось удалить Excel файл {excel_path.name}: {error}")
+    
+    def cleanup_all_files(
+        self,
+        archive_paths: Sequence[Path],
+        excel_paths: Sequence[Path],
+        extraction_success: bool = True,
+        db_save_success: bool = True,
+    ) -> None:
+        """
+        Удаляет все файлы после обработки.
+        
+        Args:
+            archive_paths: Пути к архивным файлам
+            excel_paths: Пути к Excel файлам
+            extraction_success: Успешность распаковки
+            db_save_success: Успешность записи в БД
+            
+        Note:
+            Метод не бросает исключения - ошибки удаления файлов логируются,
+            но не прерывают выполнение программы.
+        """
+        try:
+            self.cleanup_archives_after_extraction(archive_paths, extraction_success)
+        except Exception as error:
+            logger.warning(f"Ошибка при очистке архивов: {error}")
+        
+        try:
+            self.cleanup_excel_after_save(excel_paths, db_save_success)
+        except Exception as error:
+            logger.warning(f"Ошибка при очистке Excel файлов: {error}")
+    
+    def _remove_file_with_retry(
+        self, 
+        path: Path, 
+        max_retries: int = 3, 
+        retry_delay: float = 2.0
+    ) -> bool:
+        """
+        Удаляет файл с повторными попытками и таймаутом.
+        
+        Args:
+            path: Путь к файлу для удаления
+            max_retries: Максимальное количество попыток
+            retry_delay: Задержка между попытками в секундах
+        
+        Returns:
+            True если файл успешно удален, False если не удалось удалить
+        """
+        if not path.exists():
+            return True
+        
+        last_error = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                # Пытаемся закрыть файл, если он открыт
+                try:
+                    if path.is_file():
+                        # На Windows иногда помогает переименование перед удалением
+                        temp_path = path.with_suffix(path.suffix + '.tmp')
+                        if temp_path.exists():
+                            temp_path.unlink()
+                        path.rename(temp_path)
+                        temp_path.unlink()
+                    else:
+                        path.unlink()
+                except (OSError, PermissionError):
+                    # Если переименование не помогло, пробуем обычное удаление
+                    path.unlink()
+                
+                return True
+                
+            except (OSError, PermissionError) as error:
+                last_error = error
+                error_code = getattr(error, 'winerror', None) or getattr(error, 'errno', None)
+                
+                # WinError 32 = файл занят другим процессом
+                # errno 13 = Permission denied
+                if error_code in (32, 13) and attempt < max_retries:
+                    logger.debug(
+                        f"Файл {path.name} занят другим процессом. "
+                        f"Попытка {attempt}/{max_retries}, повтор через {retry_delay} сек..."
+                    )
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    break
+            except Exception as error:
+                last_error = error
+                break
+        
+        # Если все попытки не удались, пытаемся найти и завершить процесс, держащий файл
+        if last_error and error_code in (32, 13):
+            logger.warning(
+                f"Файл {path.name} заблокирован другим процессом. "
+                f"Попытка найти и завершить процесс..."
+            )
+            if self._try_kill_process_holding_file(path):
+                # Если процесс завершен, пробуем удалить файл еще раз
+                logger.info(f"Процесс завершен. Повторная попытка удаления файла {path.name}...")
+                try:
+                    time.sleep(1.0)  # Даем время процессу освободить файл
+                    path.unlink()
+                    logger.info(f"Файл {path.name} успешно удален после завершения процесса.")
+                    return True
+                except Exception as final_error:
+                    logger.warning(
+                        f"Не удалось удалить файл {path.name} даже после завершения процесса: {final_error}"
+                    )
+        
+        # Если всё равно не удалось, логируем предупреждение и пропускаем файл
+        # Не бросаем исключение - просто возвращаем False
+        logger.warning(
+            f"Не удалось удалить файл {path.name} после всех попыток: {last_error}. "
+            f"Файл будет пропущен и удален позже."
+        )
+        return False
+    
+    def _try_kill_process_holding_file(self, file_path: Path) -> bool:
+        """
+        Пытается найти и завершить процесс, который держит файл.
+        
+        Args:
+            file_path: Путь к заблокированному файлу
+            
+        Returns:
+            True если процесс найден и завершен, False в противном случае
+        """
+        if not PSUTIL_AVAILABLE:
+            logger.debug("psutil недоступен, невозможно определить процесс, держащий файл")
+            return False
+        
+        try:
+            file_path_abs = file_path.resolve()
+            file_path_str = str(file_path_abs).lower()
+            
+            # Список процессов, которые могут держать файл
+            processes_to_kill: List[psutil.Process] = []
+            
+            for proc in psutil.process_iter():
+                try:
+                    # Получаем открытые файлы процесса
+                    open_files = proc.open_files()
+                    for file_info in open_files:
+                        try:
+                            file_path_to_check = str(Path(file_info.path).resolve()).lower()
+                            if file_path_to_check == file_path_str:
+                                processes_to_kill.append(proc)
+                                logger.info(
+                                    f"Найден процесс, держащий файл {file_path.name}: "
+                                    f"PID={proc.pid}, Name={proc.name()}"
+                                )
+                                break  # Найден процесс, переходим к следующему
+                        except (OSError, ValueError):
+                            # Не удалось разрешить путь, пропускаем
+                            continue
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    # Процесс уже завершился или нет доступа
+                    continue
+                except Exception as error:
+                    logger.debug(f"Ошибка при проверке процесса PID={proc.pid}: {error}")
+                    continue
+            
+            if not processes_to_kill:
+                logger.debug(f"Не найдено процессов, держащих файл {file_path.name}")
+                return False
+            
+            # Завершаем найденные процессы
+            killed_count = 0
+            for proc in processes_to_kill:
+                try:
+                    proc_name = proc.name()
+                    proc_pid = proc.pid
+                    
+                    # Безопасные процессы для завершения (Excel, Word и т.д.)
+                    safe_to_kill = [
+                        'excel.exe', 'winword.exe', 'powerpnt.exe',
+                        'notepad.exe', 'notepad++.exe', 'code.exe',
+                        'devenv.exe', 'pycharm64.exe', 'idea64.exe'
+                    ]
+                    
+                    # Если это текущий процесс Python, не завершаем его
+                    current_pid = os.getpid()
+                    if proc_pid == current_pid:
+                        logger.info(
+                            f"Файл {file_path.name} удерживается текущим процессом (PID={proc_pid}). "
+                            f"Файл будет удален позже после освобождения ресурсов."
+                        )
+                        continue
+                    
+                    if proc_name.lower() not in safe_to_kill:
+                        logger.warning(
+                            f"Процесс {proc_name} (PID={proc_pid}) не в списке безопасных для завершения. "
+                            f"Пропускаем."
+                        )
+                        continue
+                    
+                    logger.info(f"Завершаю процесс {proc_name} (PID={proc_pid})...")
+                    proc.terminate()  # Сначала мягкое завершение
+                    try:
+                        proc.wait(timeout=3)  # Ждем завершения до 3 секунд
+                        logger.info(f"Процесс {proc_name} (PID={proc_pid}) успешно завершен")
+                        killed_count += 1
+                    except psutil.TimeoutExpired:
+                        # Если не завершился мягко, убиваем жестко
+                        logger.warning(
+                            f"Процесс {proc_name} (PID={proc_pid}) не завершился мягко. "
+                            f"Принудительное завершение..."
+                        )
+                        proc.kill()
+                        proc.wait(timeout=2)
+                        logger.info(f"Процесс {proc_name} (PID={proc_pid}) принудительно завершен")
+                        killed_count += 1
+                        
+                except psutil.NoSuchProcess:
+                    # Процесс уже завершился
+                    killed_count += 1
+                except psutil.AccessDenied:
+                    logger.warning(
+                        f"Нет прав для завершения процесса {proc_name} (PID={proc_pid})"
+                    )
+                except Exception as error:
+                    logger.error(
+                        f"Ошибка при завершении процесса {proc_name} (PID={proc_pid}): {error}"
+                    )
+            
+            return killed_count > 0
+            
+        except Exception as error:
+            logger.error(f"Ошибка при поиске процесса, держащего файл {file_path.name}: {error}")
+            return False
+

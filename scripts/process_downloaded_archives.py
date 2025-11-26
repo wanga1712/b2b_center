@@ -111,18 +111,6 @@ def process_archive_group(
         "total_size": total_size,
         "files_count": len(workbook_paths),
     }
-        
-    except DocumentSearchError as error:
-        elapsed_time = time.time() - start_time
-        logger.error(f"❌ Ошибка при обработке архива {base_name}: {error}")
-        return {
-            "workbook_paths": [],
-            "matches": [],
-            "error": str(error),
-            "processing_time": elapsed_time,
-            "total_size": 0,
-            "files_count": 0,
-        }
 
 
 def main():

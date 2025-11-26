@@ -42,7 +42,7 @@ class ArchiveExtractor:
         effective_unrar = unrar_path or os.environ.get("UNRAR_TOOL")
         self._unrar_path = Path(effective_unrar) if effective_unrar else None
 
-        effective_winrar = winrar_path or os.environ.get("WINRAR_PATH", r"C:\Program Files\WinRAR")
+        effective_winrar = winrar_path or os.environ.get("WINRAR_PATH")
         self._winrar_path = Path(effective_winrar) if effective_winrar else None
 
         if self._winrar_path and self._winrar_path.exists():
@@ -58,11 +58,19 @@ class ArchiveExtractor:
         self._active_extract_dirs: List[Path] = []
         self._selector = DocumentSelector()
 
-    def extract_archive(self, archive_path: Path) -> List[Path]:
+    def extract_archive(
+        self,
+        archive_path: Path,
+        target_dir: Optional[Path] = None,
+    ) -> List[Path]:
         """Распаковка архива (ZIP, RAR, 7Z) и поиск всех XLSX внутри."""
         logger.info(f"Распаковка архива {archive_path.name}")
-        extract_dir = archive_path.parent / f"extract_{archive_path.stem}_{uuid.uuid4().hex[:6]}"
-        extract_dir.mkdir(parents=True, exist_ok=True)
+        if target_dir:
+            extract_dir = Path(target_dir)
+            extract_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            extract_dir = archive_path.parent / f"extract_{archive_path.stem}_{uuid.uuid4().hex[:6]}"
+            extract_dir.mkdir(parents=True, exist_ok=True)
         self._register_extract_dir(extract_dir)
         suffix = archive_path.suffix.lower()
 
@@ -199,10 +207,6 @@ class ArchiveExtractor:
         possible_dirs = [
             str(self._winrar_path) if self._winrar_path else None,
             os.environ.get("WINRAR_PATH"),
-            r"C:\Program Files\WinRAR",
-            r"C:\Program Files (x86)\WinRAR",
-            r"C:\Program Files\UNRAR",
-            r"C:\Program Files (x86)\UNRAR",
         ]
 
         exe_names = ["UnRAR.exe", "UNRAR.exe", "UNRARG.exe", "WinRAR.exe", "rar.exe"]
@@ -302,6 +306,10 @@ class ArchiveExtractor:
     def active_extract_dirs(self) -> List[Path]:
         """Возвращает список директорий распаковки."""
         return self._active_extract_dirs.copy()
+
+    def clear_active_extract_dirs(self) -> None:
+        """Очищает список зарегистрированных директорий распаковки."""
+        self._active_extract_dirs.clear()
 
     def is_file_archive(self, file_path: Path) -> bool:
         """

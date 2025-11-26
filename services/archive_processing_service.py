@@ -51,7 +51,7 @@ def format_number(value: str) -> str:
 
 
 def find_archives_in_directory(directory: Path) -> Dict[str, List[Path]]:
-    """Находит архивы в директории и группирует по базовому имени."""
+    """Находит архивы в директории (включая подпапки) и группирует по базовому имени."""
     archives: Dict[str, List[Path]] = defaultdict(list)
     archive_extensions = {".rar", ".zip", ".7z"}
 
@@ -59,7 +59,7 @@ def find_archives_in_directory(directory: Path) -> Dict[str, List[Path]]:
         logger.error(f"Директория не существует: {directory}")
         return archives
 
-    for file_path in directory.iterdir():
+    for file_path in directory.rglob("*"):
         if not file_path.is_file():
             continue
         suffix = file_path.suffix.lower()

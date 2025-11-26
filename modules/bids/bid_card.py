@@ -1,7 +1,7 @@
 """
-Карточка торгов для канбан-доски
+Карточка закупки для канбан-доски
 
-Представляет отдельную заявку/торг с возможностью
+Представляет отдельную заявку/закупку с возможностью
 перетаскивания между этапами.
 """
 
@@ -21,9 +21,9 @@ from modules.styles.general_styles import (
 
 class BidCard(QFrame):
     """
-    Карточка торгов
+    Карточка закупки
     
-    Отображает информацию о торге и поддерживает
+    Отображает информацию о закупке и поддерживает
     drag-and-drop для перемещения между колонками.
     """
     
@@ -32,7 +32,7 @@ class BidCard(QFrame):
         Инициализация карточки
         
         Args:
-            bid_data: Данные о торге (номер, название, дата и т.д.)
+            bid_data: Данные о закупке (номер, название, дата и т.д.)
             parent: Родительский виджет
         """
         super().__init__(parent)
@@ -64,7 +64,7 @@ class BidCard(QFrame):
         # Включаем возможность перетаскивания
         self.setAcceptDrops(False)  # Карточка не принимает другие карточки
         
-        # Номер торгов
+        # Номер закупки
         bid_number = self.bid_data.get('number', 'Без номера')
         number_label = QLabel(f"№ {bid_number}")
         apply_label_style(number_label, 'normal')
@@ -76,7 +76,7 @@ class BidCard(QFrame):
         """)
         layout.addWidget(number_label)
         
-        # Название торгов
+        # Название закупки
         bid_name = self.bid_data.get('name', 'Без названия')
         name_label = QLabel(bid_name)
         apply_label_style(name_label, 'normal')
@@ -148,6 +148,6 @@ class BidCard(QFrame):
             logger.info("Карточка успешно перемещена")
     
     def get_bid_data(self) -> Dict[str, Any]:
-        """Получение данных о торге"""
+        """Получение данных о закупке"""
         return self.bid_data
 

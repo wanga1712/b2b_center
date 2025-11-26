@@ -30,3 +30,8 @@ class QuotationError(CommercialAppError):
 class DocumentSearchError(CommercialAppError):
     """Ошибка поиска и обработки документации"""
     pass
+
+
+class FileCleanupError(CommercialAppError):
+    """Ошибка критической очистки файлов после обработки"""
+    pass
