@@ -54,6 +54,17 @@ The user works with the following coding languages and technologies:
 - *Security:* Never hardcode secrets. Use environment variables. Prevent SQL/JS injection.
 - *Design Patterns:* Apply appropriate patterns (Factory, Repository, Strategy, Singleton, Adapter) where architecture requires.
 
+### UI Design Principles (Salesforce-style CRM)
+
+- *Salesforce-inspired Design:* The system is designed in Salesforce CRM style, but with custom colors and forms. The interface structure follows Salesforce principles:
+  - **Layout Structure:** TopBar (top) + Sidebar (left) + Central Work Area (center) + InfoPanel (right) + BottomBar (bottom)
+  - **Navigation:** Main menu items in Sidebar, sub-items displayed as folders with icons in Central Work Area (like Windows Explorer)
+  - **Modular Navigation:** When clicking on main menu items (e.g., "CRM"), show folder structure with icons instead of direct widget access
+  - **InfoPanel:** Right panel for contextual information, statistics, quick actions, and notifications
+  - *BottomBar:* Bottom panel to frame the application, showing status, loading indicators, and service information
+- *Folder-based Navigation:* Main sections (like "CRM") show folders with icons in grid layout, clicking folders opens corresponding widgets/functionality
+- *Maximum file sizes:* 150 lines of code per module (excluding docstrings, annotations, imports, comments)
+
 ***
 
 ### Database (Python)

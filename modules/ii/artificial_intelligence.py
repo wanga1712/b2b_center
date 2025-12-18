@@ -10,7 +10,11 @@ from PyQt5.QtCore import Qt, pyqtSignal
 # Импортируем единые стили
 from modules.styles.general_styles import (
     apply_button_style, apply_input_style, apply_label_style,
-    apply_combobox_style, apply_frame_style, COLORS, FONT_SIZES
+    apply_combobox_style, apply_frame_style, COLORS, FONT_SIZES,
+    apply_scroll_area_style, apply_text_color
+)
+from modules.styles.ii_styles import (
+    apply_chat_message_style, apply_chat_input_panel_style
 )
 
 
@@ -237,28 +241,12 @@ class ChatMessageWidget(QFrame):
 
     def init_ui(self, text):
         # Используем стили из общего модуля Bitrix24
-        background_color = COLORS['primary'] if self.is_user else '#E3F2FD'
-        text_color = 'white' if self.is_user else COLORS['text_dark']
-
-        self.setStyleSheet(f"""
-            ChatMessageWidget {{
-                background: {background_color};
-                border-radius: 12px;
-                padding: 12px 16px;
-                margin: 8px 0px;
-                max-width: 80%;
-            }}
-        """)
+        apply_chat_message_style(self, self.is_user)
 
         layout = QVBoxLayout(self)
         label = QLabel(text)
-        label.setStyleSheet(f"""
-            QLabel {{
-                color: {text_color};
-                font-size: {FONT_SIZES['normal']};
-                background: transparent;
-            }}
-        """)
+        apply_label_style(label, 'normal')
+        apply_text_color(label, 'white' if self.is_user else 'text_dark')
         label.setWordWrap(True)
         label.setTextFormat(Qt.RichText)
         layout.addWidget(label)
@@ -357,7 +345,7 @@ class AIChatWidget(QWidget):
         # Область сообщений
         self.messages_area = QScrollArea()
         self.messages_area.setWidgetResizable(True)
-        self.messages_area.setStyleSheet(f"border: none; background: {COLORS['secondary']};")
+        apply_scroll_area_style(self.messages_area, 'subtle')
 
         self.messages_widget = QWidget()
         self.messages_layout = QVBoxLayout(self.messages_widget)
@@ -368,7 +356,7 @@ class AIChatWidget(QWidget):
 
         # Панель ввода
         input_panel = QFrame()
-        input_panel.setStyleSheet(f"background: {COLORS['white']}; border-top: 1px solid {COLORS['border']};")
+        apply_chat_input_panel_style(input_panel)
         input_layout = QHBoxLayout(input_panel)
         input_layout.setContentsMargins(12, 12, 12, 12)
 

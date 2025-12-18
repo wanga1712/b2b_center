@@ -25,6 +25,7 @@ from modules.styles.general_styles import (
 
 from modules.bids.settings_okpd_manager import OKPDManager
 from modules.bids.settings_stop_words_manager import StopWordsManager
+from modules.bids.settings_document_stop_phrases_manager import DocumentStopPhrasesManager
 from modules.bids.settings_categories_manager import CategoriesManager
 from modules.bids.search_params_cache import SearchParamsCache
 from services.tender_repository import TenderRepository
@@ -56,6 +57,7 @@ class BidsSettingsTab(QWidget):
         """
         super().__init__()
         self._is_initializing = True
+        self._restoring_from_cache = False
         self.tender_repo = tender_repo
         self.user_id = user_id
         self.search_params_cache = search_params_cache
@@ -64,6 +66,7 @@ class BidsSettingsTab(QWidget):
         # Инициализируем менеджеры
         self.okpd_manager = OKPDManager(self.tender_repo, self.user_id)
         self.stop_words_manager = StopWordsManager(self.tender_repo, self.user_id)
+        self.document_stop_phrases_manager = DocumentStopPhrasesManager(self.tender_repo, self.user_id)
         self.categories_manager = CategoriesManager(self.tender_repo, self.user_id)
         
         self.init_ui()
@@ -108,6 +111,9 @@ class BidsSettingsTab(QWidget):
         
         # Раздел стоп-слов
         self._create_stop_words_section(settings_layout)
+
+        # Раздел стоп-фраз анализа документации
+        self._create_document_stop_phrases_section(settings_layout)
         
         # Кнопка показать тендеры
         self._create_show_tenders_section(settings_layout)
@@ -356,6 +362,60 @@ class BidsSettingsTab(QWidget):
         stop_words_layout.addWidget(stop_words_scroll)
         
         parent_layout.addWidget(stop_words_frame)
+
+    def _create_document_stop_phrases_section(self, parent_layout: QVBoxLayout):
+        """Создание раздела стоп-фраз для анализа документации."""
+        stop_phrases_frame = QFrame()
+        apply_frame_style(stop_phrases_frame, 'content')
+        stop_phrases_layout = QVBoxLayout(stop_phrases_frame)
+        stop_phrases_layout.setContentsMargins(15, 15, 15, 15)
+        stop_phrases_layout.setSpacing(10)
+
+        stop_phrases_title = QLabel("Стоп-фразы для анализа документации")
+        apply_label_style(stop_phrases_title, 'h3')
+        stop_phrases_layout.addWidget(stop_phrases_title)
+
+        stop_phrases_info = QLabel(
+            "Стоп-фразы используются при поиске товаров в сметах и другой "
+            "документации. Если в тексте строки присутствует одна из стоп-фраз, "
+            "эта строка не будет учитываться как совпадение с товаром."
+        )
+        apply_label_style(stop_phrases_info, 'small')
+        apply_text_style_light_italic(stop_phrases_info)
+        stop_phrases_info.setWordWrap(True)
+        stop_phrases_layout.addWidget(stop_phrases_info)
+
+        input_layout = QHBoxLayout()
+        input_layout.setSpacing(10)
+
+        self.document_stop_phrases_input = QLineEdit()
+        self.document_stop_phrases_input.setPlaceholderText(
+            "Введите стоп-фразу или несколько через запятую..."
+        )
+        apply_input_style(self.document_stop_phrases_input)
+        input_layout.addWidget(self.document_stop_phrases_input)
+
+        btn_add_stop_phrase = QPushButton("Добавить")
+        apply_button_style(btn_add_stop_phrase, 'primary')
+        btn_add_stop_phrase.clicked.connect(self.handle_add_document_stop_phrases)
+        input_layout.addWidget(btn_add_stop_phrase)
+
+        stop_phrases_layout.addLayout(input_layout)
+
+        self.document_stop_phrases_container = QWidget()
+        self.document_stop_phrases_layout = QVBoxLayout(self.document_stop_phrases_container)
+        self.document_stop_phrases_layout.setSpacing(8)
+        self.document_stop_phrases_layout.setContentsMargins(0, 0, 0, 0)
+
+        stop_phrases_scroll = QScrollArea()
+        stop_phrases_scroll.setWidgetResizable(True)
+        stop_phrases_scroll.setWidget(self.document_stop_phrases_container)
+        stop_phrases_scroll.setMinimumHeight(150)
+        stop_phrases_scroll.setMaximumHeight(350)
+        apply_scroll_area_style(stop_phrases_scroll, 'card')
+        stop_phrases_layout.addWidget(stop_phrases_scroll)
+
+        parent_layout.addWidget(stop_phrases_frame)
     
     def _create_show_tenders_section(self, parent_layout: QVBoxLayout):
         """Создание раздела кнопки показать тендеры"""
@@ -397,11 +457,12 @@ class BidsSettingsTab(QWidget):
     def _init_settings_data(self) -> None:
         """Инициализация данных после построения интерфейса"""
         try:
-            logger.info("Инициализация данных настроек (ОКПД, категории, стоп-слова)")
+            logger.info("Инициализация данных настроек (ОКПД, категории, стоп-слова, стоп-фразы документации)")
             self.load_okpd_codes()
             self.load_okpd_categories()
             self.load_user_okpd_codes()
             self.load_user_stop_words()
+            self.load_document_stop_phrases()
         except Exception as e:
             logger.error(f"Ошибка при инициализации данных настроек: {e}")
     
@@ -639,6 +700,78 @@ class BidsSettingsTab(QWidget):
         words_label.setText(", ".join(words_html_parts))
         words_label.linkActivated.connect(self._handle_stop_word_link)
         self.stop_words_layout.addWidget(words_label)
+
+    def load_document_stop_phrases(self):
+        """Загрузка и отображение стоп-фраз анализа документации."""
+        if not self.tender_repo:
+            return
+
+        try:
+            while self.document_stop_phrases_layout.count():
+                item = self.document_stop_phrases_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+
+            phrases = self.tender_repo.get_document_stop_phrases(self.user_id)
+        except (DatabaseConnectionError, DatabaseQueryError) as error:
+            logger.error(f"Ошибка подключения к БД при загрузке стоп-фраз документации: {error}")
+            if self.parent_widget and hasattr(self.parent_widget, '_handle_db_reconnection'):
+                self.parent_widget._handle_db_reconnection()
+            return
+        except Exception as error:
+            logger.error(f"Ошибка при загрузке стоп-фраз документации: {error}", exc_info=True)
+            return
+
+        if not phrases:
+            no_data_label = QLabel("Нет добавленных стоп-фраз для анализа документации")
+            apply_label_style(no_data_label, 'normal')
+            apply_text_style_light_italic(no_data_label)
+            self.document_stop_phrases_layout.addWidget(no_data_label)
+            return
+
+        parts = []
+        for row in phrases:
+            phrase_text = row.get("phrase", "")
+            if not phrase_text:
+                continue
+            phrase_id = row.get("id")
+            safe_text = html.escape(phrase_text)
+            parts.append(
+                f"<span style='font-weight: 500;'>{safe_text}</span> "
+                f"<a href='remove-doc:{phrase_id}' style='color:#E53935;text-decoration:none;'>✕</a>"
+            )
+
+        label = QLabel()
+        apply_label_style(label, 'normal')
+        label.setWordWrap(True)
+        label.setTextFormat(Qt.RichText)
+        label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        label.setOpenExternalLinks(False)
+        label.setText(", ".join(parts))
+        label.linkActivated.connect(self._handle_document_stop_phrase_link)
+        self.document_stop_phrases_layout.addWidget(label)
+
+    def handle_add_document_stop_phrases(self):
+        """Обработка добавления стоп-фраз анализа документации."""
+        if hasattr(self, 'document_stop_phrases_input'):
+            input_text = self.document_stop_phrases_input.text()
+            self.document_stop_phrases_manager.add_stop_phrases(input_text, self.parent_widget)
+            self.document_stop_phrases_input.clear()
+            self.load_document_stop_phrases()
+
+    def handle_remove_document_stop_phrase(self, phrase_id: int):
+        """Обработка удаления стоп-фразы анализа документации."""
+        self.document_stop_phrases_manager.remove_stop_phrase(phrase_id, self.parent_widget)
+        self.load_document_stop_phrases()
+
+    def _handle_document_stop_phrase_link(self, link: str):
+        """Обработка клика по ссылке удаления стоп-фразы анализа документации."""
+        if link.startswith("remove-doc:"):
+            try:
+                phrase_id = int(link.split("remove-doc:")[1])
+                self.handle_remove_document_stop_phrase(phrase_id)
+            except ValueError:
+                logger.error(f"Некорректный идентификатор стоп-фразы в ссылке: {link}")
     
     def handle_add_stop_words(self):
         """Обработка добавления стоп-слов"""
@@ -682,6 +815,11 @@ class BidsSettingsTab(QWidget):
             logger.debug("Пропускаем очистку кэша (инициализация категории)")
             return
 
+        # Пропускаем очистку кэша, если категория восстанавливается из кэша
+        if getattr(self, '_restoring_from_cache', False):
+            logger.debug("Пропускаем очистку кэша (восстановление категории из кэша)")
+            return
+
         if not hasattr(self, 'category_filter_combo') or not self.category_filter_combo:
             return
         
@@ -692,11 +830,15 @@ class BidsSettingsTab(QWidget):
         cached_category_id = self.search_params_cache.get_category_id()
         
         # Очищаем кэш только если категория действительно изменилась
-        if current_category_id != cached_category_id:
+        # Если cached_category_id == None, это первый запуск, не очищаем кэш
+        if cached_category_id is not None and current_category_id != cached_category_id:
             self.search_params_cache.clear_tenders_cache()
             logger.debug(f"Кэш закупок очищен из-за изменения категории: {cached_category_id} -> {current_category_id}")
         else:
-            logger.debug(f"Категория не изменилась ({current_category_id}), кэш не очищается")
+            if cached_category_id is None:
+                logger.debug(f"Первая установка категории ({current_category_id}), кэш не очищается")
+            else:
+                logger.debug(f"Категория не изменилась ({current_category_id}), кэш не очищается")
         
         # Сохраняем текущую категорию в кэш
         self.search_params_cache.save_category(current_category_id)
@@ -758,9 +900,12 @@ class BidsSettingsTab(QWidget):
         for i in range(self.category_filter_combo.count()):
             category_id = self.category_filter_combo.itemData(i)
             if category_id == cached_category_id:
+                # Устанавливаем флаг, что мы восстанавливаем из кэша
+                self._restoring_from_cache = True
                 self.category_filter_combo.blockSignals(True)
                 self.category_filter_combo.setCurrentIndex(i)
                 self.category_filter_combo.blockSignals(False)
+                self._restoring_from_cache = False
                 logger.info(f"Восстановлена категория из кэша: {cached_category_id}")
                 return
     

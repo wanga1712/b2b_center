@@ -7,10 +7,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-import shutil
-import gc
 from typing import Any, Dict, List, Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from loguru import logger
 
@@ -21,6 +18,8 @@ from services.document_search.document_downloader import DocumentDownloader
 from services.document_search.document_selector import DocumentSelector
 from services.document_search.archive_extractor import ArchiveExtractor
 from services.document_search.match_finder import MatchFinder
+from services.document_search.product_loader import ProductLoader
+from services.document_search.search_coordinator import DocumentSearchCoordinator
 
 
 class DocumentSearchService:
@@ -55,13 +54,27 @@ class DocumentSearchService:
         self.db_manager = db_manager
         self.download_dir = Path(download_dir)
         self.download_dir.mkdir(parents=True, exist_ok=True)
-        self._product_names: Optional[List[str]] = None
         self.cleanup_manager = cleanup_manager or ArchiveCleanupManager()
         self.progress_callback = progress_callback
 
+        # Инициализируем модули
         self._downloader = DocumentDownloader(self.download_dir, progress_callback)
         self._selector = DocumentSelector()
         self._extractor = ArchiveExtractor(unrar_path, winrar_path)
+        
+        # Инициализируем загрузчик товаров и координатор
+        self.product_loader = ProductLoader(db_manager)
+        self.coordinator = DocumentSearchCoordinator(
+            download_dir=self.download_dir,
+            downloader=self._downloader,
+            selector=self._selector,
+            extractor=self._extractor,
+            cleanup_manager=self.cleanup_manager,
+            progress_callback=progress_callback,
+        )
+        
+        # Для обратной совместимости
+        self._product_names: Optional[List[str]] = None
 
     def _update_progress(self, stage: str, progress: int, detail: Optional[str] = None):
         """Обновление прогресса через callback"""
@@ -73,14 +86,8 @@ class DocumentSearchService:
 
     def ensure_products_loaded(self) -> None:
         """Ленивая загрузка названий товаров (по требованию пользователя)."""
-        if self._product_names is not None:
-            return
-
-        logger.info("Загрузка списка товаров для поиска по документации...")
-        query = "SELECT name FROM products WHERE name IS NOT NULL"
-        results = self.db_manager.execute_query(query)
-        self._product_names = [row.get("name", "").strip() for row in results if row.get("name")]
-        logger.info(f"Получено наименований товаров: {len(self._product_names)}")
+        self.product_loader.ensure_products_loaded()
+        self._product_names = self.product_loader.product_names
 
     def run_document_search(
         self,
@@ -102,112 +109,34 @@ class DocumentSearchService:
         if not documents:
             raise DocumentSearchError("У выбранного торга нет приложенных документов.")
 
-        self._update_progress("Подготовка...", 0, "Выбор документов для обработки")
-        tender_folder = self._prepare_tender_folder(tender_id, registry_type)
+        self.coordinator._update_progress("Подготовка...", 0, "Выбор документов для обработки")
+        tender_folder = self.coordinator.prepare_tender_folder(tender_id, registry_type)
 
         target_docs = self._selector.choose_documents(documents)
         unique_docs_to_download = self._selector.group_documents_by_archive(target_docs, documents)
         logger.info(f"Найдено уникальных документов/архивов для скачивания: {len(unique_docs_to_download)}")
-        
-        total_to_download = len(unique_docs_to_download)
-        max_attempts = 2
-        attempt = 1
-        last_error: Optional[Exception] = None
-        successful_downloads: List[Path] = []
-        workbook_paths: List[Path] = []
 
-        while attempt <= max_attempts:
-            all_downloaded_paths: List[Path] = []
-            downloaded_count = 0
-            self._update_progress(
-                "Скачивание документов",
-                0,
-                f"Найдено документов для скачивания: {total_to_download}",
-            )
-            logger.info(
-                "Начинаю параллельное скачивание %s документов/архивов (попытка %s/%s)",
-                total_to_download,
-                attempt,
-                max_attempts,
-            )
+        # ЭТАП 1: Скачивание документов
+        successful_downloads = self.coordinator.download_documents(
+            unique_docs_to_download,
+            documents,
+            tender_folder,
+        )
 
-            try:
-                with ThreadPoolExecutor(max_workers=min(4, total_to_download or 1)) as executor:
-                    future_to_doc = {
-                        executor.submit(
-                            self._downloader.download_required_documents,
-                            target_doc,
-                            documents,
-                            tender_folder,
-                        ): target_doc
-                        for target_doc in unique_docs_to_download
-                    }
-
-                    for future in as_completed(future_to_doc):
-                        target_doc = future_to_doc[future]
-                        doc_name = target_doc.get('file_name') or target_doc.get('document_links', 'unknown')
-                        try:
-                            downloaded_paths = future.result(timeout=300)
-                            all_downloaded_paths.extend(downloaded_paths)
-                            downloaded_count += 1
-                            progress = int((downloaded_count / total_to_download) * 30) if total_to_download > 0 else 0
-                            self._update_progress(
-                                "Скачивание документов",
-                                progress,
-                                f"Скачано: {downloaded_count}/{total_to_download} - {doc_name}"
-                            )
-                            logger.info(f"Успешно скачан документ/архив: {doc_name}")
-                        except Exception as error:
-                            logger.error(f"Ошибка при скачивании документа {doc_name}: {error}")
-                            raise
-
-                if not all_downloaded_paths:
-                    raise DocumentSearchError("Не удалось скачать ни один документ.")
-
-                self._update_progress(
-                    "Скачивание документов",
-                    30,
-                    f"Скачано документов: {downloaded_count}/{total_to_download}",
-                )
-
-                # ЭТАП 2: Извлечение данных
-                self._update_progress("Извлечение данных", 30, "Распаковка архивов и подготовка файлов...")
-                workbook_paths = self._prepare_workbook_paths(all_downloaded_paths)
-                self._update_progress("Извлечение данных", 60, f"Найдено файлов для обработки: {len(workbook_paths)}")
-                successful_downloads = all_downloaded_paths
-                break
-            except DocumentSearchError as error:
-                last_error = error
-                logger.warning(
-                    "Ошибка при обработке документов (попытка %s/%s): %s",
-                    attempt,
-                    max_attempts,
-                    error,
-                )
-                self._handle_failed_download_attempt(tender_folder, all_downloaded_paths)
-                attempt += 1
-            except Exception as error:
-                last_error = error
-                logger.warning(
-                    "Не удалось завершить попытку скачивания (попытка %s/%s): %s",
-                    attempt,
-                    max_attempts,
-                    error,
-                )
-                self._handle_failed_download_attempt(tender_folder, all_downloaded_paths)
-                attempt += 1
-
-        if not workbook_paths:
-            raise DocumentSearchError(str(last_error)) if last_error else DocumentSearchError(
-                "Не удалось подготовить файлы для обработки."
-            )
+        # ЭТАП 2: Извлечение данных
+        self.coordinator._update_progress("Извлечение данных", 30, "Распаковка архивов и подготовка файлов...")
+        workbook_paths = self.coordinator.prepare_workbook_paths(successful_downloads)
+        self.coordinator._update_progress("Извлечение данных", 60, f"Найдено файлов для обработки: {len(workbook_paths)}")
         
         # ЭТАП 3: Сверка с данными из БД
-        self._update_progress("Сверка с данными из БД", 60, "Загрузка списка товаров...")
+        self.coordinator._update_progress("Сверка с данными из БД", 60, "Загрузка списка товаров...")
         self.ensure_products_loaded()
-        matches = self._aggregate_matches_for_workbooks(workbook_paths)
+        matches = self.coordinator.aggregate_matches_for_workbooks(
+            workbook_paths,
+            self._product_names or [],
+        )
 
-        self._update_progress("Завершено", 100, f"Найдено совпадений: {len(matches)}")
+        self.coordinator._update_progress("Завершено", 100, f"Найдено совпадений: {len(matches)}")
         logger.info(f"Поиск по документации завершен, найдено совпадений: {len(matches)}")
 
         result = {
@@ -229,169 +158,6 @@ class DocumentSearchService:
 
         return result
 
-    def _prepare_tender_folder(
-        self,
-        tender_id: Optional[int],
-        registry_type: Optional[str],
-    ) -> Path:
-        """Создает рабочую директорию для файлов торга."""
-        if not tender_id:
-            fallback_dir = self.download_dir / "tender_temp"
-            fallback_dir.mkdir(parents=True, exist_ok=True)
-            return fallback_dir
-
-        safe_type = (registry_type or "tender").strip().lower() or "tender"
-        folder_name = f"{safe_type}_{tender_id}"
-        target_dir = self.download_dir / folder_name
-        target_dir.mkdir(parents=True, exist_ok=True)
-        return target_dir
-
-    def _prepare_workbook_paths(self, downloaded_paths: List[Path]) -> List[Path]:
-        """
-        Определение путей ко всем Excel файлам (напрямую или после распаковки архива).
-        """
-        if not downloaded_paths:
-            raise DocumentSearchError("Не удалось скачать документ.")
-
-        all_workbook_paths: List[Path] = []
-        archive_paths: List[Path] = []
-        excel_paths: List[Path] = []
-        
-        for path in downloaded_paths:
-            suffix = path.suffix.lower()
-            if suffix in {".rar", ".zip", ".7z"}:
-                archive_paths.append(path)
-            elif suffix in {".xlsx", ".xls"}:
-                if self._extractor.is_file_archive(path):
-                    logger.warning(f"Файл {path.name} имеет расширение Excel, но является архивом. Пропускаем.")
-                    continue
-                excel_paths.append(path)
-            else:
-                logger.warning(f"Неподдерживаемый формат файла: {path.name} (расширение: {suffix})")
-        
-        if archive_paths:
-            from services.document_search.document_selector import DocumentSelector
-            selector = DocumentSelector()
-            sorted_archive_paths = sorted(archive_paths, key=lambda p: (selector.split_archive_name(p.name)[0] or p.stem.casefold(), selector.split_archive_name(p.name)[1] or 0))
-            
-            archive_groups: Dict[str, List[Path]] = {}
-            for path in sorted_archive_paths:
-                base_name, _ = selector.split_archive_name(path.name)
-                group_key = base_name or path.stem.casefold()
-                if group_key not in archive_groups:
-                    archive_groups[group_key] = []
-                archive_groups[group_key].append(path)
-            
-            for group_paths in archive_groups.values():
-                first_path = group_paths[0]
-                suffix = first_path.suffix.lower()
-                
-                if suffix == ".rar":
-                    archive_path = first_path
-                    if len(group_paths) > 1:
-                        logger.info(
-                            "Обнаружен многочастный RAR (%s частей). Распаковываю, начиная с %s",
-                            len(group_paths),
-                            first_path.name,
-                        )
-                else:
-                    archive_path = (
-                        self._extractor.combine_multi_part_archive(group_paths)
-                        if len(group_paths) > 1
-                        else first_path
-                    )
-                extracted_paths = self._extractor.extract_archive(archive_path)
-                all_workbook_paths.extend(extracted_paths)
-        
-        all_workbook_paths.extend(excel_paths)
-        
-        if not all_workbook_paths:
-            raise DocumentSearchError("Не найдено ни одного Excel файла для обработки.")
-        
-        logger.info(f"Подготовлено {len(all_workbook_paths)} файлов для парсинга")
-        return all_workbook_paths
-
-    def _aggregate_matches_for_workbooks(self, workbook_paths: List[Path]) -> List[Dict[str, Any]]:
-        """Выполняет поиск по всем Excel и объединяет совпадения."""
-        if not self._product_names:
-            self.ensure_products_loaded()
-        
-        finder = MatchFinder(self._product_names)
-        best_matches: Dict[str, Dict[str, Any]] = {}
-        total_files = len(workbook_paths)
-        
-        for idx, workbook_path in enumerate(workbook_paths):
-            progress = 60 + int(((idx + 1) / total_files) * 35) if total_files > 0 else 60
-            file_name = workbook_path.name
-            self._update_progress(
-                "Сверка с данными из БД",
-                progress,
-                f"Обработка файла {idx + 1}/{total_files}: {file_name}"
-            )
-            
-            logger.info(f"Поиск по документу: {workbook_path}")
-            
-            # Поиск по товарам из БД
-            matches = finder.search_workbook_for_products(workbook_path)
-            for match in matches:
-                # Фильтруем только совпадения с оценкой >= 85 (100% и 85%)
-                if match.get("score", 0) < 85.0:
-                    continue
-                product_name = match["product_name"]
-                existing = best_matches.get(product_name)
-                if existing and existing["score"] >= match["score"]:
-                    continue
-                best_matches[product_name] = {
-                    **match,
-                    "source_file": str(workbook_path),
-                }
-            
-            # Дополнительный поиск по дополнительным фразам
-            additional_matches = finder.search_additional_phrases(workbook_path)
-            for match in additional_matches:
-                product_name = match["product_name"]
-                # Проверяем, нет ли уже совпадения с таким же названием из БД
-                existing = best_matches.get(product_name)
-                if existing and existing.get("score", 0) >= match.get("score", 0):
-                    continue
-                # Добавляем дополнительное совпадение
-                best_matches[product_name] = {
-                    **match,
-                    "source_file": str(workbook_path),
-                }
-            
-            # Освобождаем память после обработки каждого файла
-            gc.collect()
-
-        self._update_progress("Сверка с данными из БД", 95, f"Обработка завершена, найдено совпадений: {len(best_matches)}")
-        
-        sorted_matches = sorted(best_matches.values(), key=lambda item: item["score"], reverse=True)
-        return sorted_matches[:50]
-
-    def _handle_failed_download_attempt(
-        self,
-        tender_folder: Path,
-        downloaded_files: List[Path],
-    ) -> None:
-        """Удаляет скачанные файлы и очищает папку после неудачной попытки."""
-        extract_dirs = self._extractor.active_extract_dirs
-        try:
-            self.cleanup_manager.cleanup(downloaded_files, extract_dirs, [])
-        except Exception as cleanup_error:
-            logger.warning(f"Не удалось полностью очистить временные файлы: {cleanup_error}")
-        finally:
-            self._extractor.clear_active_extract_dirs()
-            self._reset_tender_folder(tender_folder)
-
-    @staticmethod
-    def _reset_tender_folder(tender_folder: Path) -> None:
-        """Полностью очищает папку скачивания для торга."""
-        try:
-            if tender_folder.exists():
-                shutil.rmtree(tender_folder, ignore_errors=True)
-        except Exception as error:
-            logger.warning(f"Не удалось удалить директорию {tender_folder}: {error}")
-        tender_folder.mkdir(parents=True, exist_ok=True)
 
     def debug_process_local_archives(
         self,
@@ -412,11 +178,11 @@ class DocumentSearchService:
         archive_path_objects = [Path(path) for path in archive_paths]
         
         # Извлекаем Excel файлы из архивов
-        workbook_paths = self._prepare_workbook_paths(archive_path_objects)
+        workbook_paths = self.coordinator.prepare_workbook_paths(archive_path_objects)
         
         # Загружаем товары и ищем совпадения
         self.ensure_products_loaded()
-        matches = self._aggregate_matches_for_workbooks(workbook_paths)
+        matches = self.coordinator.aggregate_matches_for_workbooks(workbook_paths, self._product_names or [])
         
         return {
             "workbook_paths": [str(path) for path in workbook_paths],

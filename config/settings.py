@@ -71,11 +71,12 @@ class Config:
         self.app = self._load_app_config()
         # Пути к инструментам и директориям (настраиваются через .env)
         # По умолчанию используется домашняя директория пользователя
-        from pathlib import Path
         default_download_dir = str(Path.home() / "Downloads" / "ЕИС_Документация")
         self.unrar_tool = self._get_env_var("UNRAR_TOOL", None)
         self.document_download_dir = self._get_env_var("DOCUMENT_DOWNLOAD_DIR", default_download_dir)
         self.winrar_path = self._get_env_var("WINRAR_PATH", None)
+        # Директория для документов по командировкам (чеки, отчеты)
+        self.business_trip_docs_dir = self._get_env_var("BUSINESS_TRIP_DOCS_DIR", None)
 
         self._configure_external_tools()
         logger.info("Конфигурация успешно загружена")
@@ -194,7 +195,7 @@ class Config:
             background_color=self._get_env_var("UI_BACKGROUND_COLOR", "#F5F5F5"),  # Bitrix24 Light Gray Background
             accent_color=self._get_env_var("UI_ACCENT_COLOR", "#2066B0"),  # Bitrix24 Primary Blue
             font_family=self._get_env_var("UI_FONT_FAMILY", "Arial"),
-            font_size=self._get_env_int("UI_FONT_SIZE", 14)  # Увеличен базовый размер шрифта
+            font_size=self._get_env_int("UI_FONT_SIZE", 16)  # Умеренно увеличен базовый размер шрифта
         )
 
     def _load_app_config(self) -> AppConfig:

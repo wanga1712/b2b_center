@@ -23,6 +23,7 @@ class TenderProvider:
         limit: int = 1000,
         specific_tender_ids: Optional[List[Dict[str, Any]]] = None,
         registry_type: Optional[str] = None,
+        tender_type: str = 'new',
     ) -> List[Dict[str, Any]]:
         """
         Возвращает список торгов (44ФЗ + 223ФЗ) согласно настройкам пользователя.
@@ -32,6 +33,7 @@ class TenderProvider:
             limit: Максимальное количество результатов
             specific_tender_ids: Список словарей с ключами 'id' и 'registry_type' для конкретных закупок
             registry_type: Тип реестра для фильтрации ('44fz' или '223fz'). Если None, возвращаются оба.
+            tender_type: Тип торгов ('new' для новых, 'won' для разыгранных). По умолчанию 'new'.
         """
         # Если указаны конкретные ID закупок, возвращаем только их
         if specific_tender_ids:
@@ -67,34 +69,53 @@ class TenderProvider:
         
         # Получаем торги только указанного типа реестра, если указан
         if registry_type is None or registry_type == '44fz':
-            tenders_44fz = self.tender_repo.get_new_tenders_44fz(
-                user_id=self.user_id,
-                user_okpd_codes=user_okpd_codes,
-                user_stop_words=user_stop_words,
-                region_id=region_id,
-                limit=limit,
-            )
+            if tender_type == 'won':
+                tenders_44fz = self.tender_repo.get_won_tenders_44fz(
+                    user_id=self.user_id,
+                    user_okpd_codes=user_okpd_codes,
+                    user_stop_words=user_stop_words,
+                    region_id=region_id,
+                    limit=limit,
+                )
+            else:
+                tenders_44fz = self.tender_repo.get_new_tenders_44fz(
+                    user_id=self.user_id,
+                    user_okpd_codes=user_okpd_codes,
+                    user_stop_words=user_stop_words,
+                    region_id=region_id,
+                    limit=limit,
+                )
             for tender in tenders_44fz:
                 tender["registry_type"] = "44fz"
         
         if registry_type is None or registry_type == '223fz':
-            tenders_223fz = self.tender_repo.get_new_tenders_223fz(
-                user_id=self.user_id,
-                user_okpd_codes=user_okpd_codes,
-                user_stop_words=user_stop_words,
-                region_id=region_id,
-                limit=limit,
-            )
+            if tender_type == 'won':
+                tenders_223fz = self.tender_repo.get_won_tenders_223fz(
+                    user_id=self.user_id,
+                    user_okpd_codes=user_okpd_codes,
+                    user_stop_words=user_stop_words,
+                    region_id=region_id,
+                    limit=limit,
+                )
+            else:
+                tenders_223fz = self.tender_repo.get_new_tenders_223fz(
+                    user_id=self.user_id,
+                    user_okpd_codes=user_okpd_codes,
+                    user_stop_words=user_stop_words,
+                    region_id=region_id,
+                    limit=limit,
+                )
             for tender in tenders_223fz:
                 tender["registry_type"] = "223fz"
 
         all_tenders = tenders_44fz + tenders_223fz
         logger.info(
-            "Получено торгов: %s (44ФЗ: %s, 223ФЗ: %s)%s",
+            "Получено торгов: %s (44ФЗ: %s, 223ФЗ: %s)%s%s",
             len(all_tenders),
             len(tenders_44fz),
             len(tenders_223fz),
             f" [фильтр: {registry_type}]" if registry_type else "",
+            f" [тип: {tender_type}]" if tender_type != 'new' else "",
         )
         return all_tenders
 

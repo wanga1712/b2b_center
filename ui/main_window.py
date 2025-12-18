@@ -2,8 +2,9 @@ from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QStackedWidget, QFrame, QSizePolicy, QApplication
 )
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QCursor
+from PyQt5.QtCore import Qt, QEvent, QSize, QThread
+from PyQt5.QtGui import QCursor, QMoveEvent, QIcon, QPixmap
+from pathlib import Path
 from loguru import logger
 
 from modules.kp.widget import KPWidget
@@ -12,6 +13,8 @@ from modules.shipping.widget import ShippingWidget
 from modules.clients.widget import ClientsWidget
 from modules.tasks.widget import TasksWidget
 from modules.ii.artificial_intelligence import AIChatWidget
+from modules.crm.home_widget import CRMHomeWidget
+from modules.crm.bottom_bar import BottomBar
 
 # Импортируем единые стили
 from modules.styles.general_styles import (
@@ -149,6 +152,22 @@ class MainWindow(QMainWindow):
         self.setGeometry(x, y, window_width, window_height)
         
         logger.info(f"Окно установлено на экране '{screen.name()}': позиция ({x}, {y}), размер {window_width}x{window_height} (95% от доступной области {available_geometry.width()}x{available_geometry.height()})")
+    
+    def moveEvent(self, event: QMoveEvent):
+        """Обработка перемещения окна для динамического пересчета масштабирования"""
+        super().moveEvent(event)
+        # При переносе окна на другой экран пересчитываем масштабирование
+        try:
+            new_screen = self.screen()
+            if new_screen:
+                from modules.styles.scaling import GlobalScaling
+                scaling = GlobalScaling()
+                # Проверяем, изменился ли экран, чтобы не пересчитывать без необходимости
+                if not hasattr(self, '_last_screen') or self._last_screen != new_screen:
+                    self._last_screen = new_screen
+                    scaling.recalculate_for_screen(new_screen)
+        except Exception:
+            pass  # Молча игнорируем ошибки при пересчете масштабирования
 
     def init_ui(self):
         """Инициализация пользовательского интерфейса"""
@@ -186,7 +205,7 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(topbar)
 
-        # ----------- Основная область: Боковая панель + Контент -----------
+        # ----------- Основная область: Боковая панель + Контент + InfoPanel -----------
         content_layout = QHBoxLayout()
         content_layout.setSpacing(0)
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -207,13 +226,54 @@ class MainWindow(QMainWindow):
 
         # Список разделов приложения с соответствующими виджетами
         # Передаем db_manager в виджеты, которым это необходимо
+        # Создаем виджеты заранее для доступа к ним
+        self.kp_widget = KPWidget(self.db_manager)
+        self.bids_widget = BidsWidget(product_db_manager=self.db_manager)
+        self.shipping_widget = ShippingWidget()
+        self.clients_widget = ClientsWidget()
+        self.tasks_widget = TasksWidget()
+        self.ai_widget = AIChatWidget()
+        
+        # Создаем CRM Home Widget (передаем tender_repo для подменю закупок)
+        tender_repo = None
+        user_id = 1
+        if hasattr(self.bids_widget, 'tender_repo'):
+            tender_repo = self.bids_widget.tender_repo
+            logger.info(f"tender_repo передан в CRMHomeWidget: {tender_repo is not None}")
+        else:
+            logger.warning("tender_repo не найден в bids_widget")
+        
+        if hasattr(self.bids_widget, 'current_user_id'):
+            user_id = self.bids_widget.current_user_id
+        
+        # Передаем search_params_cache из BidsWidget для синхронизации настроек
+        search_params_cache = None
+        if hasattr(self.bids_widget, 'search_params_cache'):
+            search_params_cache = self.bids_widget.search_params_cache
+            logger.info("search_params_cache передан из BidsWidget в CRMHomeWidget")
+        else:
+            logger.warning("search_params_cache не найден в BidsWidget")
+        
+        self.crm_home_widget = CRMHomeWidget(
+            tender_repo=tender_repo,
+            user_id=user_id,
+            bids_widget=self.bids_widget,
+            main_window=self,
+            search_params_cache=search_params_cache
+        )
+        self.crm_home_widget.folder_clicked.connect(self.on_crm_folder_clicked)
+        
+        # Подключаем обновление счетчиков после загрузки закупок
+        # Устанавливаем родителя для BidsWidget, чтобы он мог уведомлять MainWindow
+        self.bids_widget.setParent(self)
+        
         sections = [
-            ('КП 🚀', KPWidget(self.db_manager)),  # Коммерческие предложения
-            ('Торги 📈', BidsWidget(product_db_manager=self.db_manager)),  # Участие в торгах
-            ('Отгрузка 🚚', ShippingWidget()),  # Управление отгрузками
-            ('Клиенты 👥', ClientsWidget()),  # Управление клиентами
-            ('Задачи ✅', TasksWidget()),  # Управление задачами
-            ('AI Ассистент 🤖', AIChatWidget())  # Чат с искусственным интеллектом
+            ('КП 🚀', self.kp_widget),  # Коммерческие предложения
+            ('CRM 📈', self.crm_home_widget),  # CRM (было "Торги")
+            ('Отгрузка 🚚', self.shipping_widget),  # Управление отгрузками
+            ('Клиенты 👥', self.clients_widget),  # Управление клиентами
+            ('Задачи ✅', self.tasks_widget),  # Управление задачами
+            ('AI Ассистент 🤖', self.ai_widget)  # Чат с искусственным интеллектом
         ]
 
         # Создаем стекированный виджет для переключения между разделами
@@ -222,16 +282,29 @@ class MainWindow(QMainWindow):
                                    QSizePolicy.Expanding)  # Растягивается на все доступное пространство
 
         self.buttons = []  # Список для хранения кнопок навигации
+        self.crm_index = None  # Индекс раздела CRM в стеке
 
+        # Путь к иконке CRM
+        crm_icon_path = Path(__file__).parent.parent / 'img' / 'left_menu' / 'crm.png'
+        
         # Создаем кнопки навигации для каждого раздела
         for i, (name, widget) in enumerate(sections):
             # Создаем кнопку с названием раздела
             btn = QPushButton(name)
             btn.setCheckable(True)  # Кнопка может быть выбрана
             btn.setAutoExclusive(True)  # Только одна кнопка может быть выбрана одновременно
+            
+            # Для CRM устанавливаем иконку из файла
+            if name == 'CRM 📈' and crm_icon_path.exists():
+                icon = QIcon(str(crm_icon_path))
+                btn.setIcon(icon)
+                # Устанавливаем размер иконки (24x24 пикселей для меню)
+                btn.setIconSize(QSize(24, 24))
+                # Убираем эмодзи из текста, так как используем иконку
+                btn.setText('CRM')
 
             # При клике на кнопку переключаемся на соответствующий раздел
-            btn.clicked.connect(lambda checked, n=i: self.stacked.setCurrentIndex(n))
+            btn.clicked.connect(lambda checked, n=i: self.on_section_clicked(n))
 
             # Применяем единый стиль для кнопок сайдбара
             apply_sidebar_button_style(btn)
@@ -239,6 +312,10 @@ class MainWindow(QMainWindow):
             side_layout.addWidget(btn)  # Добавляем кнопку в боковую панель
             self.stacked.addWidget(widget)  # Добавляем виджет раздела в стек
             self.buttons.append(btn)  # Сохраняем кнопку в список
+            
+            # Сохраняем индекс CRM
+            if name == 'CRM 📈':
+                self.crm_index = i
 
         # Выбираем первую кнопку по умолчанию
         self.buttons[0].setChecked(True)
@@ -249,8 +326,226 @@ class MainWindow(QMainWindow):
         content_layout.addWidget(self.stacked)
 
         main_layout.addLayout(content_layout)
+        
+        # Создаем виджеты воронок продаж (после создания self.stacked)
+        from core.tender_database import TenderDatabaseManager
+        from modules.crm.sales_funnel import PipelineRepository, DealRepository, PipelineType
+        from modules.crm.sales_funnel.funnel_widget import SalesFunnelWidget
+        
+        tender_db_manager = None
+        if hasattr(self.bids_widget, 'tender_db_manager'):
+            tender_db_manager = self.bids_widget.tender_db_manager
+        
+        if tender_db_manager:
+            pipeline_repo = PipelineRepository(tender_db_manager)
+            deal_repo = DealRepository(tender_db_manager)
+            
+            # Получаем tender_repo для синхронизации данных
+            tender_repo_for_sync = None
+            if hasattr(self.bids_widget, 'tender_repo'):
+                tender_repo_for_sync = self.bids_widget.tender_repo
+            
+            # Получаем user_id для воронок (должен совпадать с user_id при создании сделок)
+            funnel_user_id = 1  # По умолчанию
+            if hasattr(self.bids_widget, 'current_user_id'):
+                funnel_user_id = self.bids_widget.current_user_id
+            logger.info(f"Создание виджетов воронок с user_id={funnel_user_id}")
+            
+            # Создаем виджеты для каждой воронки
+            self.sales_funnel_participation = SalesFunnelWidget(
+                PipelineType.PARTICIPATION,
+                pipeline_repo,
+                deal_repo,
+                funnel_user_id,
+                tender_repo=tender_repo_for_sync
+            )
+            self.sales_funnel_materials = SalesFunnelWidget(
+                PipelineType.MATERIALS_SUPPLY,
+                pipeline_repo,
+                deal_repo,
+                funnel_user_id,
+                tender_repo=tender_repo_for_sync
+            )
+            self.sales_funnel_subcontracting = SalesFunnelWidget(
+                PipelineType.SUBCONTRACTING,
+                pipeline_repo,
+                deal_repo,
+                funnel_user_id,
+                tender_repo=tender_repo_for_sync
+            )
+            
+            # Добавляем виджеты воронок в стек
+            self.stacked.addWidget(self.sales_funnel_participation)
+            self.stacked.addWidget(self.sales_funnel_materials)
+            self.stacked.addWidget(self.sales_funnel_subcontracting)
+        
+        # Добавляем BottomBar снизу
+        self.bottom_bar = BottomBar()
+        main_layout.addWidget(self.bottom_bar)
+        
         self.setCentralWidget(central_widget)  # Устанавливаем центральный виджет
 
         # --------- Единый стиль для области контента -----------
         apply_stacked_style(self.stacked)  # Применяем единый стиль для стекированного виджета
+        
+        # Запускаем фоновое обновление статусов закупок с задержкой
+        # Первый запуск через 10 минут после старта, затем каждые 3 часа
+        from PyQt5.QtCore import QTimer
+        self.status_updater_timer = QTimer(self)
+        self.status_updater_timer.timeout.connect(self._start_status_updater)
+        
+        # Первый запуск через 10 минут (600000 мс)
+        INITIAL_DELAY_MS = 10 * 60 * 1000  # 10 минут
+        # Последующие запуски каждые 3 часа (10800000 мс)
+        UPDATE_INTERVAL_MS = 3 * 60 * 60 * 1000  # 3 часа
+        
+        # Запускаем первый раз через 10 минут
+        QTimer.singleShot(INITIAL_DELAY_MS, self._start_status_updater)
+        # Настраиваем периодический запуск каждые 3 часа
+        self.status_updater_timer.setInterval(UPDATE_INTERVAL_MS)
+        self.status_updater_timer.start()
+        
+        logger.info(
+            f"Настроено обновление статусов: первый запуск через 10 минут, "
+            f"затем каждые 3 часа"
+        )
+    
+    def _start_status_updater(self):
+        """Запуск фонового обновления статусов закупок"""
+        try:
+            # Проверяем, есть ли подключение к tender_monitor БД
+            if hasattr(self.bids_widget, 'tender_db_manager') and self.bids_widget.tender_db_manager:
+                from core.tender_status_updater import TenderStatusUpdater, ensure_status_update_functions
+                
+                # Убеждаемся, что функции обновления статусов созданы в БД
+                if ensure_status_update_functions(self.bids_widget.tender_db_manager):
+                    # Проверяем, не запущен ли уже обновлятель
+                    if hasattr(self, 'status_updater') and self.status_updater and self.status_updater.isRunning():
+                        logger.debug("Обновление статусов уже выполняется, пропускаем")
+                        return
+                    
+                    # Создаем и запускаем обновлятель статусов в фоне
+                    self.status_updater = TenderStatusUpdater(
+                        self.bids_widget.tender_db_manager,
+                        parent=self
+                    )
+                    # Подключаем сигналы для логирования
+                    self.status_updater.status_updated.connect(
+                        lambda results: logger.info(f"Статусы закупок обновлены: {results}")
+                    )
+                    self.status_updater.error_occurred.connect(
+                        lambda error: logger.error(f"Ошибка обновления статусов: {error}")
+                    )
+                    self.status_updater.finished.connect(
+                        lambda: logger.info("Обновление статусов завершено")
+                    )
+                    # Задаем минимальный приоритет фоновой задаче
+                    self.status_updater.setPriority(QThread.LowestPriority)
+                    # Запускаем в фоне
+                    self.status_updater.start()
+                    logger.info("Запущено фоновое обновление статусов закупок")
+                else:
+                    logger.warning("Не удалось создать функции обновления статусов в БД")
+            else:
+                logger.warning("Нет подключения к tender_monitor БД для обновления статусов")
+        except Exception as e:
+            logger.error(f"Ошибка при запуске обновления статусов: {e}", exc_info=True)
+    
+    def on_section_clicked(self, index: int):
+        """Обработка клика на раздел в боковом меню"""
+        self.stacked.setCurrentIndex(index)
+    
+    def on_crm_folder_clicked(self, folder_id: str):
+        """Обработка клика на папку в CRM Home Widget"""
+        logger.info(f"Клик на папку CRM: {folder_id}")
+        
+        # Маппинг папок на виджеты и вкладки
+        folder_to_widget_and_tab = {
+            # Закупки (подменю) - разделы по статусам и типам ФЗ
+            'purchases_44fz_new': (self.bids_widget, 1),  # Новые закупки 44ФЗ (индекс 1)
+            'purchases_44fz_commission': (self.bids_widget, 5),  # Работа комиссии 44 ФЗ (индекс 5)
+            'purchases_44fz_won': (self.bids_widget, 3),  # Разыгранные закупки 44ФЗ (индекс 3)
+            'purchases_223fz_new': (self.bids_widget, 2),  # Новые закупки 223ФЗ (индекс 2)
+            'purchases_223fz_won': (self.bids_widget, 4),  # Разыгранные закупки 223ФЗ (индекс 4)
+            # Коммерческие предложения
+            'commercial_proposals': (self.kp_widget, None),
+            # Клиенты
+            'clients_customers': (self.clients_widget, None),
+            'clients_contractors': (self.clients_widget, None),
+            'clients_designers': (self.clients_widget, None),
+            'clients_suppliers': (self.clients_widget, None),
+            # Воронки продаж
+            'sales_funnel_participation': (getattr(self, 'sales_funnel_participation', None), None),
+            'sales_funnel_materials': (getattr(self, 'sales_funnel_materials', None), None),
+            'sales_funnel_subcontracting': (getattr(self, 'sales_funnel_subcontracting', None), None),
+        }
+        
+        # Если есть соответствующий виджет, переключаемся на него
+        if folder_id in folder_to_widget_and_tab:
+            widget, tab_index = folder_to_widget_and_tab[folder_id]
+            
+            if widget is None:
+                logger.warning(f"Виджет для папки {folder_id} не инициализирован")
+                return
+            
+            # Если это BidsWidget, он может быть не в стеке, но мы можем его показать
+            if widget == self.bids_widget:
+                # Проверяем, есть ли BidsWidget в стеке
+                bids_index = None
+                for i in range(self.stacked.count()):
+                    if self.stacked.widget(i) == self.bids_widget:
+                        bids_index = i
+                        break
+                
+                # Если BidsWidget не в стеке, добавляем его
+                if bids_index is None:
+                    bids_index = self.stacked.count()
+                    self.stacked.addWidget(self.bids_widget)
+                
+                # Переключаемся на BidsWidget
+                self.stacked.setCurrentIndex(bids_index)
+                
+                # Показываем нужный раздел (без вкладок)
+                if folder_id in ['purchases_44fz_new', 'purchases_223fz_new', 'purchases_44fz_won', 
+                                 'purchases_223fz_won', 'purchases_44fz_commission']:
+                    if hasattr(widget, 'show_section'):
+                        widget.show_section(folder_id)
+                    else:
+                        logger.error(f"BidsWidget не имеет метода show_section")
+                
+                # Обновляем кнопку в меню - переключаемся на CRM, так как BidsWidget теперь часть CRM
+                if self.crm_index is not None:
+                    self.buttons[self.crm_index].setChecked(True)
+            elif folder_id.startswith('sales_funnel_'):
+                # Для воронок продаж ищем виджет в стеке
+                widget_index = None
+                for i in range(self.stacked.count()):
+                    if self.stacked.widget(i) == widget:
+                        widget_index = i
+                        break
+                
+                if widget_index is not None:
+                    self.stacked.setCurrentIndex(widget_index)
+                    # Обновляем кнопку в меню - переключаемся на CRM
+                    if self.crm_index is not None:
+                        self.buttons[self.crm_index].setChecked(True)
+                else:
+                    logger.warning(f"Виджет воронки {folder_id} не найден в стеке")
+            else:
+                # Для других виджетов ищем в стеке
+                for i in range(self.stacked.count()):
+                    if self.stacked.widget(i) == widget:
+                        self.stacked.setCurrentIndex(i)
+                        # Обновляем кнопку в меню
+                        self.buttons[i].setChecked(True)
+                        break
+        else:
+            # Для других папок пока просто логируем
+            logger.info(f"Папка {folder_id} пока не имеет соответствующего виджета")
+    
+    def update_purchases_counts(self, category_id=None, user_okpd_codes=None, user_stop_words=None):
+        """Обновление счетчиков в подменю закупок после загрузки данных"""
+        if hasattr(self, 'crm_home_widget') and self.crm_home_widget:
+            # Передаем все фильтры для правильного подсчета
+            self.crm_home_widget.counts_update_requested.emit((category_id, user_okpd_codes, user_stop_words))
 

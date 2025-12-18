@@ -94,6 +94,31 @@ def main():
         choices=['44fz', '223fz'],
         help='Тип реестра для анализа (44fz или 223fz). Если не указан, анализируются оба реестра.'
     )
+    parser.add_argument(
+        '--tender-type',
+        type=str,
+        choices=['new', 'won'],
+        default='new',
+        help='Тип торгов для анализа (new для новых, won для разыгранных). По умолчанию new.'
+    )
+    parser.add_argument(
+        '--max-workers',
+        type=int,
+        default=2,
+        help='Максимальное количество параллельных потоков (по умолчанию: 2 для ноутбуков)'
+    )
+    parser.add_argument(
+        '--batch-size',
+        type=int,
+        default=5,
+        help='Размер партии торгов для обработки перед паузой (по умолчанию: 5)'
+    )
+    parser.add_argument(
+        '--batch-delay',
+        type=float,
+        default=10.0,
+        help='Задержка между партиями торгов в секундах (по умолчанию: 10.0)'
+    )
     args = parser.parse_args()
     
     # Парсим ID закупок, если указаны
@@ -137,24 +162,26 @@ def main():
         sys.exit(1)
     
     try:
-        # Создаем обработчик
+        # Создаем обработчик с настраиваемым количеством потоков
         runner = ArchiveBackgroundRunner(
             tender_db_manager=tender_db_manager,
             product_db_manager=product_db_manager,
             user_id=args.user_id,
-            max_workers=8,
+            max_workers=args.max_workers,
+            batch_size=args.batch_size,
+            batch_delay=args.batch_delay,
         )
         
         # Если указан флаг --all-after-priority, сначала обрабатываем приоритетные, затем все остальные
         if args.all_after_priority and specific_tender_ids:
             logger.info("Режим 'все после приоритетных': сначала обрабатываем приоритетные закупки")
             # Обрабатываем приоритетные
-            priority_stats = runner.run(specific_tender_ids=specific_tender_ids, registry_type=args.registry_type)
+            priority_stats = runner.run(specific_tender_ids=specific_tender_ids, registry_type=args.registry_type, tender_type=args.tender_type)
             logger.info(f"Приоритетные закупки обработаны: {priority_stats.get('processed', 0)}/{priority_stats.get('total_tenders', 0)}")
             
             # Теперь обрабатываем все остальные (без конкретных ID)
             logger.info("Теперь обрабатываем все остальные закупки по настройкам пользователя")
-            all_stats = runner.run(specific_tender_ids=None, registry_type=args.registry_type)
+            all_stats = runner.run(specific_tender_ids=None, registry_type=args.registry_type, tender_type=args.tender_type)
             
             # Объединяем статистику
             stats = {
@@ -169,7 +196,7 @@ def main():
             }
         else:
             # Обычный режим: либо конкретные закупки, либо все по настройкам
-            stats = runner.run(specific_tender_ids=specific_tender_ids, registry_type=args.registry_type)
+            stats = runner.run(specific_tender_ids=specific_tender_ids, registry_type=args.registry_type, tender_type=args.tender_type)
         
         logger.info("\n✅ Обработка завершена успешно")
         if args.all_after_priority and specific_tender_ids:

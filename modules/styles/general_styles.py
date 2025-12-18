@@ -1,6 +1,7 @@
 """
 Единые стили для всего приложения B2B AutoDesk с глобальным масштабированием
 """
+from loguru import logger
 from modules.styles.scaling  import scale_size, scale_font_size, get_scale_factor
 from config.settings import config
 
@@ -10,8 +11,11 @@ SCALE_FACTOR = get_scale_factor()
 # Получаем настройки UI из конфигурации
 UI_CONFIG = config.ui
 
-# Базовый размер шрифта из конфигурации (если задан)
-BASE_FONT_SIZE = UI_CONFIG.font_size if hasattr(UI_CONFIG, 'font_size') and UI_CONFIG.font_size > 0 else 14
+# Базовый размер шрифта - умеренно увеличен для лучшей читаемости
+# Оптимальный баланс между читаемостью и компактностью
+DEFAULT_BASE_FONT_SIZE = 16  # Увеличен на ~14% от стандартного 14px
+config_font_size = UI_CONFIG.font_size if hasattr(UI_CONFIG, 'font_size') and UI_CONFIG.font_size > 0 else DEFAULT_BASE_FONT_SIZE
+BASE_FONT_SIZE = max(config_font_size, 14)  # Минимум 14px для читаемости
 
 # Семейство шрифта из конфигурации
 FONT_FAMILY = UI_CONFIG.font_family if hasattr(UI_CONFIG, 'font_family') and UI_CONFIG.font_family else 'Arial'
@@ -37,11 +41,12 @@ SIZES = {
     'border_radius_normal': scale_size(6),
     'border_radius_large': scale_size(8),
     'border_radius_xlarge': scale_size(12),
-    'button_height': scale_size(28),  # Уменьшено с 40 до 28 (текст + 6-8px padding)
-    'input_height': scale_size(28),   # Уменьшено для компактности
-    'sidebar_width': scale_size(200),
-    'topbar_height': scale_size(48),  # Уменьшено с 58
-    'table_row_height': scale_size(35),  # Уменьшено с 45
+    'button_height': scale_size(30),  # Умеренно увеличено
+    'input_height': scale_size(30),   # Умеренно увеличено
+    'sidebar_width': scale_size(200),  # Небольшое увеличение
+    'topbar_height': scale_size(50),  # Умеренно увеличено
+    'table_row_height': scale_size(36),  # Умеренно увеличено
+    'chip_padding': scale_size(12),
 }
 
 # Цветовая палитра Bitrix24
@@ -118,7 +123,22 @@ BUTTON_STYLES = {
             background: {COLORS['secondary']};
             border-color: {COLORS['primary']};
         }}
-    """
+    """,
+    'icon': f"""
+        QPushButton {{
+            background: {COLORS['white']};
+            color: {COLORS['text_dark']};
+            border: 1px solid {COLORS['border']};
+            border-radius: {scale_size(15)}px;
+            padding: 0;
+            font-weight: bold;
+            min-height: {scale_size(30)}px;
+            min-width: {scale_size(30)}px;
+        }}
+        QPushButton:hover {{
+            background: {COLORS['secondary']};
+        }}
+    """,
 }
 
 # Стили для полей ввода
@@ -173,6 +193,25 @@ LABEL_STYLES = {
     'small': f"font-family: \"{FONT_FAMILY}\"; font-size: {FONT_SIZES['small']}; color: {COLORS['text_light']};",
     'xlarge': f"font-family: \"{FONT_FAMILY}\"; font-size: {FONT_SIZES['xlarge']}; color: {COLORS['text_dark']}; font-weight: bold;",
     'xxlarge': f"font-family: \"{FONT_FAMILY}\"; font-size: {FONT_SIZES['xxlarge']}; color: {COLORS['white']}; font-weight: bold;",
+    'chip': f"font-family: \"{FONT_FAMILY}\"; font-size: {FONT_SIZES['normal']}; color: {COLORS['text_dark']}; padding: {scale_size(5)}px; min-height: {scale_size(40)}px;",
+    'info_box_large': f"""
+        font-family: "{FONT_FAMILY}";
+        font-size: {FONT_SIZES['normal']};
+        color: {COLORS['text_light']};
+        font-style: italic;
+        padding: {scale_size(30)}px;
+        background: {COLORS['white']};
+        border-radius: {SIZES['border_radius_normal']}px;
+    """,
+    'info_box_small': f"""
+        font-family: "{FONT_FAMILY}";
+        font-size: {FONT_SIZES['small']};
+        color: {COLORS['text_light']};
+        padding: {scale_size(10)}px {scale_size(15)}px;
+        background: {COLORS['white']};
+        border-radius: {SIZES['border_radius_normal']}px;
+        margin-bottom: {scale_size(10)}px;
+    """,
 }
 
 # Стили для фреймов
@@ -192,7 +231,80 @@ FRAME_STYLES = {
             border-right: 1px solid {COLORS['border']};
             min-width: {SIZES['sidebar_width']}px;
         }}
-    """
+    """,
+    'chip': f"""
+        QFrame {{
+            background: {COLORS['secondary']};
+            border: 1px solid {COLORS['border']};
+            border-radius: {SIZES['border_radius_normal']}px;
+            padding: {SIZES['chip_padding']}px;
+        }}
+    """,
+    'panel': f"""
+        QFrame {{
+            background: {COLORS['white']};
+            border-radius: {SIZES['border_radius_normal']}px;
+            padding: {scale_size(30)}px;
+        }}
+    """,
+    'secondary': f"""
+        QFrame {{
+            background: {COLORS['secondary']};
+            border-radius: {SIZES['border_radius_small']}px;
+            padding: {scale_size(12)}px {scale_size(16)}px;
+        }}
+    """,
+    'surface': f"""
+        QFrame {{
+            background: {COLORS['white']};
+            border-radius: {SIZES['border_radius_small']}px;
+            padding: {scale_size(8)}px {scale_size(10)}px;
+        }}
+    """,
+}
+
+SCROLL_AREA_STYLES = {
+    'subtle': f"""
+        QScrollArea {{
+            border: none;
+            background: {COLORS['secondary']};
+        }}
+    """,
+    'card': f"""
+        QScrollArea {{
+            border: 1px solid {COLORS['border']};
+            border-radius: {SIZES['border_radius_normal']}px;
+            background: {COLORS['white']};
+        }}
+    """,
+    'transparent': """
+        QScrollArea {
+            border: none;
+            background: transparent;
+        }
+    """,
+}
+
+LIST_WIDGET_STYLES = {
+    'card': f"""
+        QListWidget {{
+            border: 1px solid {COLORS['border']};
+            border-radius: {SIZES['border_radius_normal']}px;
+            background: {COLORS['white']};
+            padding: {SIZES['padding_small']}px;
+        }}
+        QListWidget::item {{
+            padding: {scale_size(8)}px;
+            border-bottom: 1px solid {COLORS['border']};
+        }}
+        QListWidget::item:hover {{
+            background: {COLORS['secondary']};
+        }}
+        QListWidget::item:selected {{
+            background: {COLORS['primary']};
+            color: {COLORS['white']};
+        }}
+    """,
 }
 
 # Стили для стекированного виджета
@@ -308,6 +420,35 @@ TABLE_STYLES = {
     """
 }
 
+TEXT_EDIT_STYLES = {
+    'log': f"""
+        QTextEdit {{
+            background: {COLORS['white']};
+            border: 1px solid {COLORS['border']};
+            border-radius: {SIZES['border_radius_normal']}px;
+            padding: {SIZES['padding_large']}px;
+            font-family: "Consolas", "Courier New", monospace;
+            font-size: {FONT_SIZES['small']};
+        }}
+    """,
+}
+
+PROGRESS_BAR_STYLES = {
+    'primary': f"""
+        QProgressBar {{
+            border: 1px solid {COLORS['border']};
+            border-radius: {SIZES['border_radius_normal']}px;
+            background: {COLORS['secondary']};
+            text-align: center;
+            height: {scale_size(25)}px;
+        }}
+        QProgressBar::chunk {{
+            background: {COLORS['primary']};
+            border-radius: {SIZES['border_radius_normal']}px;
+        }}
+    """,
+}
+
 # Функции для применения стилей
 def apply_button_style(widget, style_type='primary'):
     widget.setStyleSheet(BUTTON_STYLES.get(style_type, BUTTON_STYLES['primary']))
@@ -316,13 +457,59 @@ def apply_input_style(widget, style_type='default'):
     widget.setStyleSheet(INPUT_STYLES.get(style_type, INPUT_STYLES['default']))
 
 def apply_label_style(widget, style_type='normal'):
-    widget.setStyleSheet(LABEL_STYLES.get(style_type, LABEL_STYLES['normal']))
+    """Применение стиля к метке с обработкой ошибок"""
+    try:
+        style = LABEL_STYLES.get(style_type, LABEL_STYLES['normal'])
+        widget.setStyleSheet(style)
+    except Exception as e:
+        logger.debug(f"Ошибка при применении стиля метки: {e}")
+        # При ошибке применяем минимальный стиль
+        try:
+            widget.setStyleSheet(f"font-size: {FONT_SIZES.get('normal', '14px')};")
+        except:
+            pass
 
 def apply_combobox_style(widget):
     widget.setStyleSheet(COMBOBOX_STYLES['default'])
 
 def apply_frame_style(widget, style_type='card'):
     widget.setStyleSheet(FRAME_STYLES.get(style_type, FRAME_STYLES['card']))
+
+TAB_STYLES = {
+    'default': f"""
+        QTabWidget::pane {{
+            border: 1px solid {COLORS['border']};
+            background: {COLORS['secondary']};
+            border-radius: {SIZES['border_radius_normal']}px;
+        }}
+        QTabBar::tab {{
+            background: {COLORS['white']};
+            color: {COLORS['text_dark']};
+            padding: {SIZES['padding_normal']}px {SIZES['padding_large']}px;
+            margin-right: 2px;
+            border-top-left-radius: {SIZES['border_radius_small']}px;
+            border-top-right-radius: {SIZES['border_radius_small']}px;
+            font-size: {FONT_SIZES['normal']};
+            font-family: "{FONT_FAMILY}";
+        }}
+        QTabBar::tab:selected {{
+            background: {COLORS['primary']};
+            color: {COLORS['white']};
+        }}
+        QTabBar::tab:hover {{
+            background: {COLORS['secondary']};
+        }}
+    """
+}
+
+def apply_tab_style(widget, style_type='default'):
+    widget.setStyleSheet(TAB_STYLES.get(style_type, TAB_STYLES['default']))
+
+def apply_scroll_area_style(widget, style_type='card'):
+    widget.setStyleSheet(SCROLL_AREA_STYLES.get(style_type, SCROLL_AREA_STYLES['card']))
+
+def apply_list_widget_style(widget, style_type='card'):
+    widget.setStyleSheet(LIST_WIDGET_STYLES.get(style_type, LIST_WIDGET_STYLES['card']))
 
 def apply_stacked_style(widget):
     widget.setStyleSheet(STACKED_STYLES['default'])
@@ -336,18 +523,33 @@ def apply_topbar_style(widget):
 def apply_table_style(widget):
     widget.setStyleSheet(TABLE_STYLES['default'])
 
+def apply_text_edit_style(widget, style_type='log'):
+    widget.setStyleSheet(TEXT_EDIT_STYLES.get(style_type, TEXT_EDIT_STYLES['log']))
+
+def apply_progress_bar_style(widget, style_type='primary'):
+    widget.setStyleSheet(PROGRESS_BAR_STYLES.get(style_type, PROGRESS_BAR_STYLES['primary']))
+
+def apply_separator_style(widget, color_type='border'):
+    widget.setStyleSheet(f"color: {COLORS.get(color_type, COLORS['border'])};")
+
 # Вспомогательные функции для часто используемых стилей (DRY принцип)
-def apply_text_color(widget, color_type='text_light'):
+def apply_text_color(widget, color_type: str = 'text_light') -> None:
     """
     Применение цвета текста к виджету.
-    
+
+    ВАЖНО:
+    - Функция намеренно простая и безопасная.
+    - Не пытается разбирать существующий CSS, чтобы не ломать многострочные стили.
+    - Просто устанавливает цвет текста, не добавляя "color" в произвольное место.
+
     Args:
         widget: Виджет (QLabel, QPushButton и т.д.)
-        color_type: Тип цвета ('text_light', 'text_dark', 'primary', 'error', 'success', 'warning')
+        color_type: Ключ из COLORS ('text_light', 'text_dark', 'primary', 'error', 'success', 'warning')
     """
     color = COLORS.get(color_type, COLORS['text_light'])
-    current_style = widget.styleSheet() or ""
-    widget.setStyleSheet(f"{current_style} color: {color};")
+    # Устанавливаем только цвет текста. Если нужен сложный стиль,
+    # он должен задаваться через apply_label_style / apply_*_style.
+    widget.setStyleSheet(f"color: {color};")
 
 def apply_font_weight(widget, weight='600'):
     """

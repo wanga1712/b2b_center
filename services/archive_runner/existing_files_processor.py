@@ -14,7 +14,7 @@ from loguru import logger
 class ExistingFilesProcessor:
     """Обработчик ранее скачанных файлов в директории проектов."""
 
-    FOLDER_PATTERN = re.compile(r"^(?P<registry>44fz|223fz)_(?P<tender_id>\d+)$", re.IGNORECASE)
+    FOLDER_PATTERN = re.compile(r"^(?P<registry>44fz|223fz)_(?P<tender_id>\d+)(?:_won)?$", re.IGNORECASE)
     ARCHIVE_EXTENSIONS = {".rar", ".zip", ".7z"}
     EXCEL_EXTENSIONS = {".xlsx", ".xls"}
 
@@ -37,12 +37,15 @@ class ExistingFilesProcessor:
                 continue
             tender_id = int(match.group("tender_id"))
             registry_type = match.group("registry").lower()
+            # Определяем тип торгов из имени папки
+            tender_type = 'won' if entry.name.endswith('_won') else 'new'
             if self._folder_contains_documents(entry):
                 pending.append(
                     {
                         "folder_path": entry,
                         "tender_id": tender_id,
                         "registry_type": registry_type,
+                        "tender_type": tender_type,
                     }
                 )
         logger.info(f"Найдено директорий с существующими файлами: {len(pending)}")
@@ -71,7 +74,7 @@ class ExistingFilesProcessor:
                         "retries": 0,
                     }
                 )
-        logger.info(f"В папке {folder.name} найдено файлов для повторной обработки: {len(records)}")
+        logger.debug(f"В папке {folder.name} найдено файлов для повторной обработки: {len(records)}")
         return records
 
     def _folder_contains_documents(self, folder: Path) -> bool:

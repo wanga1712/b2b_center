@@ -13,6 +13,7 @@ from datetime import datetime
 import json
 from loguru import logger
 from core.tender_database import TenderDatabaseManager
+from core.exceptions import DatabaseQueryError, DatabaseConnectionError
 from psycopg2.extras import RealDictCursor
 
 
@@ -39,6 +40,7 @@ class TenderMatchRepository:
         processing_time_seconds: Optional[float] = None,
         total_files_processed: int = 0,
         total_size_bytes: int = 0,
+        error_reason: Optional[str] = None,
     ) -> Optional[int]:
         """
         Сохранение или обновление результата поиска совпадений
@@ -51,6 +53,7 @@ class TenderMatchRepository:
             processing_time_seconds: Время обработки в секундах
             total_files_processed: Количество обработанных файлов
             total_size_bytes: Размер обработанных файлов в байтах
+            error_reason: Причина ошибки (None = успешно, текст = описание ошибки)
         
         Returns:
             True если успешно сохранено, False в противном случае
@@ -60,8 +63,16 @@ class TenderMatchRepository:
             existing = self.get_match_result(tender_id, registry_type)
             match_id: Optional[int] = existing["id"] if existing else None
             
-            # Автоматически устанавливаем is_interesting = FALSE при отсутствии совпадений
-            is_interesting_value = None if match_count > 0 else False
+            # Автоматически устанавливаем is_interesting на основе процента совпадений:
+            # - Если найдено 100% совпадение - интересно (True)
+            # - Если найдено 85% совпадение - интересно (True)
+            # - Если ничего не найдено (match_count = 0) - неинтересно (False)
+            if match_count == 0:
+                is_interesting_value = False  # Неинтересно, если ничего не найдено
+            elif match_percentage >= 85.0:
+                is_interesting_value = True  # Интересно, если есть 85% или 100% совпадения
+            else:
+                is_interesting_value = False  # Неинтересно, если процент меньше 85%
             
             if existing:
                 # Обновляем существующую запись
@@ -111,16 +122,22 @@ class TenderMatchRepository:
                 match_id = self._fetch_match_id(tender_id, registry_type)
             
             # Выводим детальную информацию о сохраненных данных
-            logger.info(
-                f"Сохранен результат поиска для закупки {tender_id} ({registry_type}): "
-                f"{match_count} совпадений, {match_percentage:.1f}% (match_id={match_id})"
-            )
-            logger.info(
-                f"Детали сохраненных данных в БД: tender_id={tender_id}, registry_type={registry_type}, "
-                f"match_count={match_count}, match_percentage={match_percentage:.2f}%, "
-                f"processing_time={processing_time_seconds or 0.0:.2f} сек, "
-                f"files_processed={total_files_processed}, size_bytes={total_size_bytes}"
-            )
+            if error_reason:
+                logger.warning(
+                    f"Сохранена запись об ошибке для закупки {tender_id} ({registry_type}): "
+                    f"error_reason={error_reason} (match_id={match_id})"
+                )
+            else:
+                logger.info(
+                    f"Сохранен результат поиска для закупки {tender_id} ({registry_type}): "
+                    f"{match_count} совпадений, {match_percentage:.1f}% (match_id={match_id})"
+                )
+                logger.info(
+                    f"Детали сохраненных данных в БД: tender_id={tender_id}, registry_type={registry_type}, "
+                    f"match_count={match_count}, match_percentage={match_percentage:.2f}%, "
+                    f"processing_time={processing_time_seconds or 0.0:.2f} сек, "
+                    f"files_processed={total_files_processed}, size_bytes={total_size_bytes}"
+                )
             return match_id
             
         except Exception as e:
@@ -168,7 +185,12 @@ class TenderMatchRepository:
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
 
-            for match in details:
+            # Фильтруем совпадения для сохранения - только >= 56% (чтобы показывать все с цветами)
+            filtered_details = [m for m in details if m.get("score", 0) >= 56.0]
+            
+            for match in filtered_details:
+                score = match.get("score", 0)
+                
                 row_data = match.get("row_data") or {}
                 matched_keywords = match.get("matched_keywords") or []
                 
@@ -184,7 +206,7 @@ class TenderMatchRepository:
                 params = (
                     match_id,
                     match.get("product_name"),
-                    match.get("score"),
+                    score,
                     match.get("sheet_name"),
                     match.get("row"),
                     match.get("column"),
@@ -198,10 +220,10 @@ class TenderMatchRepository:
                 self.db_manager.execute_update(insert_query, params)
             
             # Выводим детальную информацию о сохраненных совпадениях
-            logger.info(f"Записано детальных совпадений: {len(details)} (match_id={match_id})")
-            if details:
+            logger.info(f"Записано детальных совпадений: {len(filtered_details)} из {len(details)} (match_id={match_id}, фильтр >= 56%)")
+            if filtered_details:
                 logger.info(f"Детали сохраненных совпадений для match_id={match_id}:")
-                for idx, match in enumerate(details[:10], 1):  # Показываем первые 10
+                for idx, match in enumerate(filtered_details[:10], 1):  # Показываем первые 10
                     product_name = match.get('product_name', 'N/A')
                     score = match.get('score', 0.0)
                     sheet_name = match.get('sheet_name', 'N/A')
@@ -368,6 +390,7 @@ class TenderMatchRepository:
                     'match_result': match_result,
                     'exact_count': 0,
                     'good_count': 0,
+                    'brown_count': 0,
                     'total_count': match_count,
                 }
             
@@ -376,6 +399,7 @@ class TenderMatchRepository:
                     'match_result': match_result,
                     'exact_count': 0,
                     'good_count': 0,
+                    'brown_count': 0,
                     'total_count': match_count,
                 }
             
@@ -383,6 +407,7 @@ class TenderMatchRepository:
                 SELECT 
                     COUNT(*) FILTER (WHERE score >= 100.0) as exact_count,
                     COUNT(*) FILTER (WHERE score >= 85.0 AND score < 100.0) as good_count,
+                    COUNT(*) FILTER (WHERE score >= 56.0 AND score < 85.0) as brown_count,
                     COUNT(*) as total_count
                 FROM tender_document_match_details
                 WHERE match_id = %s
@@ -393,20 +418,17 @@ class TenderMatchRepository:
                 RealDictCursor
             )
             
+            stats = {}
             if results:
                 stats = dict(results[0])
-                return {
-                    'match_result': match_result,
-                    'exact_count': int(stats.get('exact_count', 0) or 0),
-                    'good_count': int(stats.get('good_count', 0) or 0),
-                    'total_count': int(stats.get('total_count', 0) or 0),
-                }
             
             return {
                 'match_result': match_result,
-                'exact_count': 0,
-                'good_count': 0,
-                'total_count': match_count,
+                'exact_count': int(stats.get('exact_count', 0) or 0),
+                'good_count': int(stats.get('good_count', 0) or 0),
+                'brown_count': int(stats.get('brown_count', 0) or 0),
+                'total_count': int(stats.get('total_count', 0) or 0),
+                'error_reason': None,  # Колонка error_reason не существует в таблице
             }
             
         except Exception as e:
@@ -453,7 +475,8 @@ class TenderMatchRepository:
                     cell_address,
                     source_file,
                     matched_text,
-                    matched_display_text
+                    matched_display_text,
+                    row_data
                 FROM tender_document_match_details
                 WHERE match_id = %s
                 ORDER BY score DESC, id ASC
@@ -611,6 +634,72 @@ class TenderMatchRepository:
             # В случае ошибки возвращаем все ID
             return tender_ids
 
+    def acquire_tender_lock(self, tender_id: int, registry_type: str, tender_type: str = 'new') -> bool:
+        """
+        Получение блокировки для тендера (предотвращает параллельную обработку)
+        
+        Args:
+            tender_id: ID тендера
+            registry_type: Тип реестра ('44fz' или '223fz')
+            tender_type: Тип торгов ('new' для новых, 'won' для завершенных). По умолчанию 'new'.
+            
+        Returns:
+            True если блокировка получена, False если тендер уже обрабатывается другим процессом
+        """
+        # Генерируем уникальный идентификатор блокировки на основе tender_id, registry_type и tender_type
+        # Используем детерминированный способ для создания уникального числа
+        # Комбинируем tender_id, registry_type и tender_type в одно число
+        # Для 44fz используем 1, для 223fz - 2
+        # Для new используем 0, для won - 1
+        registry_hash = 1 if registry_type == "44fz" else 2
+        tender_type_hash = 0 if tender_type == "new" else 1
+        # Используем формулу для генерации уникального lock_id
+        # tender_id * 4 + registry_hash * 2 + tender_type_hash гарантирует уникальность
+        lock_id = (tender_id * 4 + registry_hash * 2 + tender_type_hash) % (2 ** 31)
+        
+        try:
+            locked = self.db_manager.acquire_advisory_lock(lock_id)
+            if locked:
+                logger.debug(f"✅ Блокировка получена для тендера {tender_id} ({registry_type}, {tender_type}), lock_id={lock_id}")
+            else:
+                # Это не ошибка - просто тендер уже обрабатывается другим процессом
+                logger.debug(f"⏸️ Тендер {tender_id} ({registry_type}, {tender_type}) уже обрабатывается другим процессом (lock_id={lock_id})")
+            return locked
+        except (DatabaseQueryError, DatabaseConnectionError) as e:
+            # Это реальная ошибка (проблема с БД, например)
+            logger.error(f"❌ Ошибка БД при получении блокировки для тендера {tender_id} ({registry_type}, {tender_type}): {e}", exc_info=True)
+            return False
+        except Exception as e:
+            # Неожиданная ошибка
+            logger.error(f"❌ Неожиданная ошибка при получении блокировки для тендера {tender_id} ({registry_type}, {tender_type}): {e}", exc_info=True)
+            return False
+    
+    def release_tender_lock(self, tender_id: int, registry_type: str, tender_type: str = 'new') -> bool:
+        """
+        Освобождение блокировки для тендера
+        
+        Args:
+            tender_id: ID тендера
+            registry_type: Тип реестра ('44fz' или '223fz')
+            tender_type: Тип торгов ('new' для новых, 'won' для завершенных). По умолчанию 'new'.
+            
+        Returns:
+            True если блокировка освобождена, False в противном случае
+        """
+        # Используем ту же формулу, что и в acquire_tender_lock
+        registry_hash = 1 if registry_type == "44fz" else 2
+        tender_type_hash = 0 if tender_type == "new" else 1
+        lock_id = (tender_id * 4 + registry_hash * 2 + tender_type_hash) % (2 ** 31)
+        
+        try:
+            unlocked = self.db_manager.release_advisory_lock(lock_id)
+            if unlocked:
+                logger.debug(f"Блокировка освобождена для тендера {tender_id} ({registry_type}), lock_id={lock_id}")
+            return unlocked
+        except Exception as e:
+            logger.error(f"Ошибка при освобождении блокировки для тендера {tender_id} ({registry_type}): {e}")
+            return False
+    
     def _fetch_match_id(self, tender_id: int, registry_type: str) -> Optional[int]:
         query = """
             SELECT id FROM tender_document_matches

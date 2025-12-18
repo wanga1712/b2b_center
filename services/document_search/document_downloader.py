@@ -86,7 +86,7 @@ class DocumentDownloader:
         logger.info(f"Начинаю скачивание документа '{file_name}' по ссылке {url}")
 
         try:
-            timeout_config = (30, 300)  # 30 сек на подключение, 5 минут на чтение
+            timeout_config = (30, 600)  # 30 сек на подключение, 10 минут на чтение
             
             response = self.http_session.get(
                 url,

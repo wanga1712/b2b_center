@@ -15,8 +15,9 @@ from loguru import logger
 
 # Импортируем единые стили
 from modules.styles.general_styles import (
-    apply_label_style, COLORS, FONT_SIZES, SIZES
+    apply_label_style, apply_text_color, apply_font_weight
 )
+from modules.styles.bids_styles import apply_bid_card_style
 
 
 class BidCard(QFrame):
@@ -48,18 +49,7 @@ class BidCard(QFrame):
         layout.setContentsMargins(12, 12, 12, 12)
         
         # Стиль карточки
-        self.setStyleSheet(f"""
-            QFrame {{
-                background: {COLORS['white']};
-                border: 1px solid {COLORS['border']};
-                border-radius: {SIZES['border_radius_normal']}px;
-                min-height: 100px;
-            }}
-            QFrame:hover {{
-                border: 2px solid {COLORS['primary']};
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            }}
-        """)
+        apply_bid_card_style(self)
         
         # Включаем возможность перетаскивания
         self.setAcceptDrops(False)  # Карточка не принимает другие карточки
@@ -68,12 +58,8 @@ class BidCard(QFrame):
         bid_number = self.bid_data.get('number', 'Без номера')
         number_label = QLabel(f"№ {bid_number}")
         apply_label_style(number_label, 'normal')
-        number_label.setStyleSheet(f"""
-            QLabel {{
-                font-weight: bold;
-                color: {COLORS['primary']};
-            }}
-        """)
+        apply_font_weight(number_label)
+        apply_text_color(number_label, 'primary')
         layout.addWidget(number_label)
         
         # Название закупки
@@ -81,26 +67,22 @@ class BidCard(QFrame):
         name_label = QLabel(bid_name)
         apply_label_style(name_label, 'normal')
         name_label.setWordWrap(True)
-        name_label.setStyleSheet(f"color: {COLORS['text_dark']};")
+        apply_text_color(name_label, 'text_dark')
         layout.addWidget(name_label)
         
         # Дата (если указана)
         if 'date' in self.bid_data:
             date_label = QLabel(self.bid_data['date'])
             apply_label_style(date_label, 'small')
-            date_label.setStyleSheet(f"color: {COLORS['text_light']};")
+            apply_text_color(date_label, 'text_light')
             layout.addWidget(date_label)
         
         # Сумма (если указана)
         if 'amount' in self.bid_data:
             amount_label = QLabel(f"Сумма: {self.bid_data['amount']}")
             apply_label_style(amount_label, 'small')
-            amount_label.setStyleSheet(f"""
-                QLabel {{
-                    color: {COLORS['text_dark']};
-                    font-weight: bold;
-                }}
-            """)
+            apply_text_color(amount_label, 'text_dark')
+            apply_font_weight(amount_label)
             layout.addWidget(amount_label)
         
         layout.addStretch()

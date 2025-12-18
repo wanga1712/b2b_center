@@ -111,7 +111,8 @@ class FileCleaner:
             
         Note:
             Метод не бросает исключения - ошибки удаления файлов логируются,
-            но не прерывают выполнение программы.
+            но не прерывают выполнение программы. Удаление выполняется быстро,
+            если файл заблокирован - пропускается без долгого ожидания.
         """
         try:
             self.cleanup_archives_after_extraction(archive_paths, extraction_success)
@@ -126,8 +127,8 @@ class FileCleaner:
     def _remove_file_with_retry(
         self, 
         path: Path, 
-        max_retries: int = 3, 
-        retry_delay: float = 2.0
+        max_retries: int = 2, 
+        retry_delay: float = 1.0
     ) -> bool:
         """
         Удаляет файл с повторными попытками и таймаутом.
@@ -188,7 +189,8 @@ class FileCleaner:
                 f"Файл {path.name} заблокирован другим процессом. "
                 f"Попытка найти и завершить процесс..."
             )
-            if self._try_kill_process_holding_file(path):
+            from services.document_search.file_lock_handler import try_kill_process_holding_file
+            if try_kill_process_holding_file(path):
                 # Если процесс завершен, пробуем удалить файл еще раз
                 logger.info(f"Процесс завершен. Повторная попытка удаления файла {path.name}...")
                 try:
@@ -200,6 +202,10 @@ class FileCleaner:
                     logger.warning(
                         f"Не удалось удалить файл {path.name} даже после завершения процесса: {final_error}"
                     )
+            else:
+                logger.warning(
+                    f"Не удалось найти или завершить процесс, держащий файл {path.name}"
+                )
         
         # Если всё равно не удалось, логируем предупреждение и пропускаем файл
         # Не бросаем исключение - просто возвращаем False

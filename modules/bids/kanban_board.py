@@ -16,7 +16,10 @@ from loguru import logger
 
 # Импортируем единые стили
 from modules.styles.general_styles import (
-    apply_label_style, apply_frame_style, COLORS, FONT_SIZES, SIZES
+    apply_label_style, apply_text_color, apply_scroll_area_style
+)
+from modules.styles.bids_styles import (
+    apply_kanban_header_style, apply_kanban_column_style
 )
 
 # Импортируем карточку закупок
@@ -46,34 +49,20 @@ class KanbanColumn(QFrame):
         layout.setContentsMargins(10, 10, 10, 10)
         
         # Стиль колонки
-        self.setStyleSheet(f"""
-            QFrame {{
-                background: {COLORS['white']};
-                border: 1px solid {COLORS['border']};
-                border-radius: {SIZES['border_radius_normal']}px;
-                min-width: 280px;
-                max-width: 320px;
-            }}
-        """)
+        apply_kanban_column_style(self)
+        self.setMinimumWidth(280)
+        self.setMaximumWidth(320)
         
         # Заголовок этапа
         header = QLabel(self.stage_name)
         apply_label_style(header, 'h3')
-        header.setStyleSheet(f"""
-            QLabel {{
-                background: {COLORS['primary']};
-                color: {COLORS['white']};
-                padding: {SIZES['padding_normal']}px;
-                border-radius: {SIZES['border_radius_small']}px;
-                font-weight: bold;
-            }}
-        """)
+        apply_kanban_header_style(header)
         layout.addWidget(header)
         
         # Счетчик карточек
         self.counter_label = QLabel("0")
         apply_label_style(self.counter_label, 'small')
-        self.counter_label.setStyleSheet(f"color: {COLORS['text_light']};")
+        apply_text_color(self.counter_label, 'text_light')
         layout.addWidget(self.counter_label)
         
         # Область прокрутки для карточек
@@ -81,12 +70,7 @@ class KanbanColumn(QFrame):
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setStyleSheet(f"""
-            QScrollArea {{
-                border: none;
-                background: transparent;
-            }}
-        """)
+        apply_scroll_area_style(scroll_area, 'transparent')
         
         # Контейнер для карточек
         self.cards_container = QWidget()
@@ -219,7 +203,8 @@ class KanbanBoard(QWidget):
         if self.board_type:
             header = QLabel(f"Канбан-доска: {self.board_type}")
             apply_label_style(header, 'h2')
-            header.setStyleSheet(f"margin-bottom: 15px; color: {COLORS['text_dark']};")
+            apply_text_color(header, 'text_dark')
+            header.setContentsMargins(0, 0, 0, 15)
             main_layout.addWidget(header)
         
         # Горизонтальный layout для колонок
@@ -240,12 +225,7 @@ class KanbanBoard(QWidget):
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setStyleSheet(f"""
-            QScrollArea {{
-                border: none;
-                background: {COLORS['secondary']};
-            }}
-        """)
+        apply_scroll_area_style(scroll_area, 'subtle')
         
         columns_widget = QWidget()
         columns_widget.setLayout(columns_layout)

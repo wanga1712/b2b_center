@@ -23,6 +23,7 @@ from loguru import logger
 
 from core.exceptions import DocumentSearchError
 from services.document_search.document_selector import DocumentSelector
+from services.error_logger import get_error_logger
 
 
 class ArchiveExtractor:
@@ -85,8 +86,14 @@ class ArchiveExtractor:
                 raise DocumentSearchError(f"Неподдерживаемый формат архива: {suffix}")
         except Exception as error:
             logger.error(f"Ошибка распаковки архива {archive_path.name}: {error}")
+            get_error_logger().log_extraction_error(
+                archive_path=archive_path,
+                error_message=str(error),
+                archive_type=suffix,
+            )
             raise DocumentSearchError(f"Ошибка распаковки архива: {error}") from error
 
+        # Ищем все поддерживаемые типы документов: Excel, Word, PDF
         xlsx_files = [
             path for path in extract_dir.rglob("*.xlsx")
             if not path.name.startswith("~$")
@@ -95,15 +102,27 @@ class ArchiveExtractor:
             path for path in extract_dir.rglob("*.xls")
             if not path.name.startswith("~$")
         ]
-        all_excel = xlsx_files + xls_files
+        docx_files = [
+            path for path in extract_dir.rglob("*.docx")
+            if not path.name.startswith("~$")
+        ]
+        doc_files = [
+            path for path in extract_dir.rglob("*.doc")
+            if not path.name.startswith("~$")
+        ]
+        pdf_files = [
+            path for path in extract_dir.rglob("*.pdf")
+        ]
         
-        if not all_excel:
-            raise DocumentSearchError("В архиве не найден ни один Excel файл (.xlsx или .xls).")
+        all_documents = xlsx_files + xls_files + docx_files + doc_files + pdf_files
+        
+        if not all_documents:
+            raise DocumentSearchError("В архиве не найден ни один поддерживаемый документ (.xlsx, .xls, .docx, .doc, .pdf).")
 
-        logger.info(f"Найдено Excel файлов после распаковки: {len(all_excel)}")
-        for file in all_excel:
+        logger.info(f"Найдено документов после распаковки: {len(all_documents)} (Excel: {len(xlsx_files) + len(xls_files)}, Word: {len(docx_files) + len(doc_files)}, PDF: {len(pdf_files)})")
+        for file in all_documents:
             logger.debug(f"  - {file}")
-        return all_excel
+        return all_documents
 
     def _extract_zip_archive(self, archive_path: Path, extract_dir: Path) -> None:
         """Распаковка ZIP-архива с правильной обработкой кодировок."""
@@ -122,6 +141,11 @@ class ArchiveExtractor:
             raise DocumentSearchError("ZIP-архив поврежден или имеет неподдерживаемый формат.") from error
         except Exception as error:
             logger.error(f"Ошибка распаковки ZIP-архива: {error}")
+            get_error_logger().log_extraction_error(
+                archive_path=archive_path,
+                error_message=str(error),
+                archive_type="zip",
+            )
             raise DocumentSearchError(f"Ошибка распаковки ZIP-архива: {error}") from error
 
     def _extract_rar_archive(self, archive_path: Path, extract_dir: Path) -> None:
@@ -144,14 +168,38 @@ class ArchiveExtractor:
             cwd=str(archive_path.parent),
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',  # Заменяем некорректные символы вместо ошибки
         )
 
         if result.returncode != 0:
-            logger.error("Не удалось распаковать RAR-архив. Код завершения: %s", result.returncode)
-            logger.error("STDOUT:\n%s", result.stdout)
-            logger.error("STDERR:\n%s", result.stderr)
+            exit_code = result.returncode
+            logger.error(f"Не удалось распаковать RAR-архив. Код завершения: {exit_code}")
+            logger.error(f"STDOUT:\n{result.stdout}")
+            logger.error(f"STDERR:\n{result.stderr}")
             self._log_rar_volume_debug_info(archive_path)
-            raise DocumentSearchError("RAR-архив поврежден или имеет неподдерживаемый формат.")
+
+            if exit_code == 3:
+                human_hint = (
+                    "RAR сообщает код 3 (CRC/повреждение или отсутствуют части архива). "
+                    "Проверьте, что скачаны все части .partXX.rar и файл не битый."
+                )
+            elif exit_code == 1:
+                human_hint = (
+                    "RAR завершился с кодом 1 (предупреждение). Проверьте целостность архива."
+                )
+            else:
+                human_hint = "RAR-архив поврежден или имеет неподдерживаемый формат."
+
+            get_error_logger().log_extraction_error(
+                archive_path=archive_path,
+                error_message=(
+                    f"Код завершения: {exit_code}, "
+                    f"STDOUT: {result.stdout}, STDERR: {result.stderr}"
+                ),
+                archive_type="rar",
+            )
+            raise DocumentSearchError(human_hint)
 
         logger.info(f"RAR-архив {archive_path.name} успешно распакован")
 
@@ -164,6 +212,11 @@ class ArchiveExtractor:
             logger.info(f"7Z-архив {archive_path.name} успешно распакован")
         except Exception as error:
             logger.error(f"Ошибка распаковки 7Z-архива {archive_path.name}: {error}")
+            get_error_logger().log_extraction_error(
+                archive_path=archive_path,
+                error_message=str(error),
+                archive_type="7z",
+            )
             raise DocumentSearchError(f"Ошибка распаковки 7Z-архива: {error}") from error
 
     def _ensure_unrar_available(self) -> str:

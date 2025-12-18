@@ -177,47 +177,57 @@ class ArchiveProcessingService:
     @staticmethod
     def build_display_chunks(match: Dict[str, Any], download_dir: Path) -> Dict[str, str]:
         """Формирует части текста для отображения результата."""
+        file_info = ArchiveProcessingService._build_file_info(match, download_dir)
+        summary_line = ArchiveProcessingService._build_summary_line(match)
+        cell_text = ArchiveProcessingService._build_cell_text(match)
+
+        return {
+            "file_info": file_info,
+            "summary": summary_line,
+            "cell_text": cell_text,
+        }
+    
+    @staticmethod
+    def _build_file_info(match: Dict[str, Any], download_dir: Path) -> str:
+        """Формирует информацию о файле"""
         source_file = Path(match.get("source_file", ""))
         try:
             relative_file = source_file.relative_to(download_dir)
         except ValueError:
             relative_file = source_file
-
-        file_info = (
+        
+        return (
             f"📄 {relative_file} | 📍 Лист: {match.get('sheet_name')} "
             f"({match.get('cell_address')})"
         )
-
+    
+    @staticmethod
+    def _build_summary_line(match: Dict[str, Any]) -> str:
+        """Формирует строку с суммарной информацией"""
         row_data = match.get("row_data") or {}
+        field_configs = [
+            ("количество", "📦", "Количество"),
+            ("стоимость_единицы", "💰", "Стоимость единицы"),
+            ("общая_стоимость", "💵", "Общая стоимость"),
+        ]
+        
         chunks = []
-        if row_data.get("количество"):
-            info = row_data["количество"]
-            chunks.append(
-                f"📦 {info.get('name', 'Количество')} ({info.get('column', '?')}): "
-                f"{format_number(str(info.get('value')))}"
-            )
-        if row_data.get("стоимость_единицы"):
-            info = row_data["стоимость_единицы"]
-            chunks.append(
-                f"💰 {info.get('name', 'Стоимость единицы')} ({info.get('column', '?')}): "
-                f"{format_number(str(info.get('value')))}"
-            )
-        if row_data.get("общая_стоимость"):
-            info = row_data["общая_стоимость"]
-            chunks.append(
-                f"💵 {info.get('name', 'Общая стоимость')} ({info.get('column', '?')}): "
-                f"{format_number(str(info.get('value')))}"
-            )
-        summary_line = " | ".join(chunks) if chunks else ""
-
+        for field_key, icon, default_name in field_configs:
+            if field_key in row_data:
+                info = row_data[field_key]
+                chunks.append(
+                    f"{icon} {info.get('name', default_name)} ({info.get('column', '?')}): "
+                    f"{format_number(str(info.get('value')))}"
+                )
+        
+        return " | ".join(chunks) if chunks else ""
+    
+    @staticmethod
+    def _build_cell_text(match: Dict[str, Any]) -> str:
+        """Формирует текст ячейки"""
         cell_text = match.get("matched_display_text") or match.get("matched_text") or ""
         cleaned_text = " ".join(str(cell_text).split())
         if len(cleaned_text) > 200:
             cleaned_text = f"{cleaned_text[:200]}..."
-
-        return {
-            "file_info": file_info,
-            "summary": summary_line,
-            "cell_text": f"📝 Строка: {cleaned_text}",
-        }
+        return f"📝 Строка: {cleaned_text}"
 

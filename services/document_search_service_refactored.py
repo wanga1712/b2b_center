@@ -114,7 +114,7 @@ class DocumentSearchService:
         
         all_downloaded_paths: List[Path] = []
         downloaded_count = 0
-        with ThreadPoolExecutor(max_workers=min(4, total_to_download)) as executor:
+        with ThreadPoolExecutor(max_workers=min(8, total_to_download)) as executor:
             future_to_doc = {
                 executor.submit(
                     self._downloader.download_required_documents,
@@ -129,7 +129,7 @@ class DocumentSearchService:
                 target_doc = future_to_doc[future]
                 doc_name = target_doc.get('file_name') or target_doc.get('document_links', 'unknown')
                 try:
-                    downloaded_paths = future.result(timeout=300)
+                    downloaded_paths = future.result(timeout=600)
                     all_downloaded_paths.extend(downloaded_paths)
                     downloaded_count += 1
                     progress = int((downloaded_count / total_to_download) * 30) if total_to_download > 0 else 0
@@ -266,7 +266,7 @@ class DocumentSearchService:
         """Выполняет поиск по всем Excel и объединяет совпадения."""
         if not self._product_names:
             self.ensure_products_loaded()
-        
+
         finder = MatchFinder(self._product_names)
         best_matches: Dict[str, Dict[str, Any]] = {}
         total_files = len(workbook_paths)

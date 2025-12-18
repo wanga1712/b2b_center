@@ -8,8 +8,9 @@ from typing import Optional
 from loguru import logger
 
 from modules.styles.general_styles import (
-    COLORS, FONT_SIZES, SIZES, apply_label_style, apply_button_style,
-    apply_text_style_light, apply_text_style_dark
+    apply_label_style, apply_button_style,
+    apply_text_style_light, apply_text_style_dark,
+    apply_progress_bar_style
 )
 from modules.styles.ui_config import configure_dialog
 
@@ -43,14 +44,14 @@ class DocumentSearchProgressDialog(QDialog):
         title_label = QLabel("Обработка документов...")
         apply_label_style(title_label, 'h2')
         apply_text_style_dark(title_label)
-        title_label.setStyleSheet(title_label.styleSheet() + " margin-bottom: 10px;")
+        title_label.setContentsMargins(0, 0, 0, 10)
         layout.addWidget(title_label)
         
         # Текущий этап
         self.stage_label = QLabel("Подготовка...")
         apply_label_style(self.stage_label, 'normal')
         apply_text_style_light(self.stage_label)
-        self.stage_label.setStyleSheet(self.stage_label.styleSheet() + " margin-bottom: 5px;")
+        self.stage_label.setContentsMargins(0, 0, 0, 5)
         layout.addWidget(self.stage_label)
         
         # Общий прогресс-бар
@@ -58,26 +59,14 @@ class DocumentSearchProgressDialog(QDialog):
         self.progress_bar.setMinimum(0)
         self.progress_bar.setMaximum(100)
         self.progress_bar.setValue(0)
-        self.progress_bar.setStyleSheet(f"""
-            QProgressBar {{
-                border: 1px solid {COLORS['border']};
-                border-radius: {SIZES['border_radius_normal']}px;
-                background: {COLORS['secondary']};
-                text-align: center;
-                height: 25px;
-            }}
-            QProgressBar::chunk {{
-                background: {COLORS['primary']};
-                border-radius: {SIZES['border_radius_normal']}px;
-            }}
-        """)
+        apply_progress_bar_style(self.progress_bar, 'primary')
         layout.addWidget(self.progress_bar)
         
         # Детальная информация
         self.detail_label = QLabel("")
         apply_label_style(self.detail_label, 'small')
         apply_text_style_light(self.detail_label)
-        self.detail_label.setStyleSheet(self.detail_label.styleSheet() + " margin-top: 5px;")
+        self.detail_label.setContentsMargins(0, 5, 0, 0)
         self.detail_label.setWordWrap(True)
         layout.addWidget(self.detail_label)
         

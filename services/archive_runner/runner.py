@@ -79,7 +79,18 @@ class ArchiveBackgroundRunner:
             unrar_path=config.unrar_tool,
             winrar_path=config.winrar_path,
         )
-        self.match_finder = MatchFinder(self.document_search_service._product_names)
+        # Стоп-фразы для анализа документации (можно хранить на стороне tender_monitor)
+        try:
+            document_stop_phrases_rows = getattr(self.tender_repo, "get_document_stop_phrases", lambda _uid: [])(user_id)
+            document_stop_phrases = [
+                row.get("phrase", "").strip()
+                for row in document_stop_phrases_rows
+                if row.get("phrase")
+            ]
+        except Exception:
+            document_stop_phrases = []
+
+        self.match_finder = MatchFinder(self.document_search_service._product_names, stop_phrases=document_stop_phrases)
         self.file_cleaner = FileCleaner()
         self.existing_processor = ExistingFilesProcessor(download_dir)
         

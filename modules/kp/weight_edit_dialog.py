@@ -8,8 +8,9 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 from modules.styles.general_styles import (
-    apply_label_style, apply_input_style, apply_button_style, COLORS
+    apply_label_style, apply_input_style, apply_button_style
 )
+from modules.styles.kp_styles import apply_kp_dialog_style
 
 
 class WeightEditDialog(QDialog):
@@ -47,7 +48,15 @@ class WeightEditDialog(QDialog):
         self.weight_input.setMinimum(0.01)
         self.weight_input.setMaximum(999999.99)
         self.weight_input.setDecimals(2)
-        self.weight_input.setValue(current_weight if current_weight > 0 else 1.0)
+        # Безопасное преобразование веса в число
+        try:
+            if isinstance(current_weight, str):
+                weight_value = float(current_weight) if current_weight.strip() and current_weight != "-" else 1.0
+            else:
+                weight_value = float(current_weight) if current_weight and current_weight > 0 else 1.0
+        except (ValueError, TypeError):
+            weight_value = 1.0
+        self.weight_input.setValue(weight_value)
         self.weight_input.selectAll()
         apply_input_style(self.weight_input)
         weight_layout.addWidget(self.weight_input)
@@ -71,11 +80,7 @@ class WeightEditDialog(QDialog):
         layout.addWidget(button_box)
         
         # Стиль диалога
-        self.setStyleSheet(f"""
-            QDialog {{
-                background: {COLORS['white']};
-            }}
-        """)
+        apply_kp_dialog_style(self)
     
     def validate_and_accept(self):
         """Валидация и принятие изменений"""

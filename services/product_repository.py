@@ -12,6 +12,7 @@ from core.models import (
     Category, Subcategory, Manufacturer
 )
 from loguru import logger
+from loguru import logger
 
 
 class ProductRepository:
@@ -32,31 +33,52 @@ class ProductRepository:
             db_manager: Менеджер базы данных
         """
         self.db = db_manager
+        # Кэш для категорий и производителей (редко меняются)
+        self._categories_cache: Optional[List[Dict[str, Any]]] = None
+        self._manufacturers_cache: Optional[List[Dict[str, Any]]] = None
+        self._subcategories_cache: Dict[int, List[Dict[str, Any]]] = {}
 
-    def get_categories(self) -> List[Dict[str, Any]]:
+    def get_categories(self, use_cache: bool = True) -> List[Dict[str, Any]]:
         """
-        Получение списка всех категорий
+        Получение списка всех категорий с кэшированием
+        
+        Args:
+            use_cache: Использовать кэш (по умолчанию True)
         
         Returns:
             Список словарей с полями id и name
         """
+        if use_cache and self._categories_cache is not None:
+            return self._categories_cache
+        
         try:
             query = "SELECT id, name FROM categories ORDER BY name"
-            return self.db.execute_query(query)
+            result = self.db.execute_query(query)
+            if use_cache:
+                self._categories_cache = result
+            return result
         except Exception as e:
             logger.error(f"Ошибка при получении категорий: {e}")
             return []
+    
+    def clear_categories_cache(self) -> None:
+        """Очистка кэша категорий"""
+        self._categories_cache = None
 
-    def get_subcategories(self, category_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_subcategories(self, category_id: Optional[int] = None, use_cache: bool = True) -> List[Dict[str, Any]]:
         """
-        Получение списка подкатегорий
+        Получение списка подкатегорий с кэшированием
         
         Args:
             category_id: Идентификатор категории (опционально)
+            use_cache: Использовать кэш (по умолчанию True)
         
         Returns:
             Список словарей с полями id, name, category_id
         """
+        if category_id and use_cache and category_id in self._subcategories_cache:
+            return self._subcategories_cache[category_id]
+        
         try:
             if category_id:
                 query = """
@@ -65,27 +87,56 @@ class ProductRepository:
                     WHERE category_id = %s 
                     ORDER BY name
                 """
-                return self.db.execute_query(query, (category_id,))
+                result = self.db.execute_query(query, (category_id,))
+                if use_cache:
+                    self._subcategories_cache[category_id] = result
+                return result
             else:
                 query = "SELECT id, name, category_id FROM subcategories ORDER BY name"
                 return self.db.execute_query(query)
         except Exception as e:
             logger.error(f"Ошибка при получении подкатегорий: {e}")
             return []
+    
+    def clear_subcategories_cache(self, category_id: Optional[int] = None) -> None:
+        """Очистка кэша подкатегорий"""
+        if category_id:
+            self._subcategories_cache.pop(category_id, None)
+        else:
+            self._subcategories_cache.clear()
 
-    def get_manufacturers(self) -> List[Dict[str, Any]]:
+    def get_manufacturers(self, use_cache: bool = True) -> List[Dict[str, Any]]:
         """
-        Получение списка всех производителей
+        Получение списка всех производителей с кэшированием
+        
+        Args:
+            use_cache: Использовать кэш (по умолчанию True)
         
         Returns:
             Список словарей с полями id и name
         """
+        if use_cache and self._manufacturers_cache is not None:
+            return self._manufacturers_cache
+        
         try:
             query = "SELECT id, name FROM manufacturers ORDER BY name"
-            return self.db.execute_query(query)
+            result = self.db.execute_query(query)
+            if use_cache:
+                self._manufacturers_cache = result
+            return result
         except Exception as e:
             logger.error(f"Ошибка при получении производителей: {e}")
             return []
+    
+    def clear_manufacturers_cache(self) -> None:
+        """Очистка кэша производителей"""
+        self._manufacturers_cache = None
+    
+    def clear_all_cache(self) -> None:
+        """Очистка всего кэша"""
+        self._categories_cache = None
+        self._manufacturers_cache = None
+        self._subcategories_cache.clear()
 
     def search_products(
         self,

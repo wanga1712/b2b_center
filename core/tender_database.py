@@ -108,9 +108,17 @@ class TenderDatabaseManager:
             with self._connection.cursor(cursor_factory=cursor_factory) as cursor:
                 cursor.execute(query, params)
                 
-                if query.strip().upper().startswith('SELECT'):
+                # Проверяем, есть ли RETURNING в запросе (для INSERT/UPDATE/DELETE с возвратом данных)
+                query_upper = query.strip().upper()
+                has_returning = 'RETURNING' in query_upper
+                
+                if query_upper.startswith('SELECT') or has_returning:
                     result = cursor.fetchall()
-                    logger.debug(f"Выполнен SELECT запрос к tender_monitor, возвращено {len(result)} строк")
+                    if has_returning:
+                        self._connection.commit()
+                        logger.debug(f"Выполнен запрос с RETURNING к tender_monitor, возвращено {len(result)} строк")
+                    else:
+                        logger.debug(f"Выполнен SELECT запрос к tender_monitor, возвращено {len(result)} строк")
                     return result
                 else:
                     self._connection.commit()
@@ -159,6 +167,82 @@ class TenderDatabaseManager:
     def is_connected(self) -> bool:
         """Проверка наличия активного подключения"""
         return self._connection is not None and not self._connection.closed
+    
+    def acquire_advisory_lock(self, lock_id: int) -> bool:
+        """
+        Получение advisory lock (блокировка на уровне БД)
+        
+        Args:
+            lock_id: Уникальный идентификатор блокировки
+            
+        Returns:
+            True если блокировка получена, False если уже заблокировано другим процессом
+        """
+        return self._execute_advisory_lock_query(
+            "SELECT pg_try_advisory_lock(%s)",
+            lock_id,
+            "pg_try_advisory_lock",
+            "получении advisory lock"
+        )
+    
+    def release_advisory_lock(self, lock_id: int) -> bool:
+        """
+        Освобождение advisory lock
+        
+        Args:
+            lock_id: Уникальный идентификатор блокировки
+            
+        Returns:
+            True если блокировка освобождена, False если блокировка не была установлена
+        """
+        return self._execute_advisory_lock_query(
+            "SELECT pg_advisory_unlock(%s)",
+            lock_id,
+            "pg_advisory_unlock",
+            "освобождении advisory lock"
+        )
+    
+    def _execute_advisory_lock_query(
+        self,
+        query: str,
+        lock_id: int,
+        result_key: str,
+        error_context: str
+    ) -> bool:
+        """Общий метод для выполнения запросов advisory lock"""
+        if not self._connection or self._connection.closed:
+            raise DatabaseConnectionError("Нет подключения к БД tender_monitor")
+        
+        try:
+            with self._connection.cursor() as cursor:
+                cursor.execute(query, (lock_id,))
+                result = cursor.fetchone()
+                lock_value = self._extract_lock_result(result, result_key)
+                self._connection.commit()
+                return lock_value
+        except psycopg2.Error as e:
+            self._connection.rollback()
+            error_msg = f"Ошибка при {error_context}: {e}"
+            logger.error(error_msg, exc_info=True)
+            raise DatabaseQueryError(error_msg) from e
+        except Exception as e:
+            self._connection.rollback()
+            error_msg = f"Неожиданная ошибка при {error_context}: {type(e).__name__}: {e}"
+            logger.error(error_msg, exc_info=True)
+            raise DatabaseQueryError(error_msg) from e
+    
+    @staticmethod
+    def _extract_lock_result(result, result_key: str) -> bool:
+        """Извлечение и преобразование результата advisory lock в boolean"""
+        if not result:
+            return False
+        
+        if hasattr(result, 'get'):
+            value = result.get(result_key)
+        else:
+            value = result[result_key]
+        
+        return bool(value) if value is not None else False
     
     @classmethod
     def get_instance(cls) -> Optional['TenderDatabaseManager']:

@@ -102,7 +102,10 @@ def calculate_quotation_total(items: list) -> float:
 
 def format_price(price: float) -> str:
     """
-    Форматирование цены для отображения
+    Форматирование цены для отображения (устаревшая функция)
+    
+    Используйте format_price_with_spaces из modules.kp.formatters вместо этой функции.
+    Эта функция оставлена для обратной совместимости.
     
     Args:
         price: Цена
@@ -110,7 +113,8 @@ def format_price(price: float) -> str:
     Returns:
         Отформатированная строка цены
     """
-    return f"{price:,.2f}".replace(',', ' ')
+    from modules.kp.formatters import format_price_with_spaces
+    return format_price_with_spaces(price)
 
 
 def parse_weight_input(weight_str: str) -> Optional[float]:
@@ -149,19 +153,19 @@ def get_unit_display_name(container_type: str, size: str) -> str:
     Returns:
         Строка для отображения единицы измерения без тире
     """
-    container_type = container_type.strip() if container_type else ""
-    size = size.strip() if size else ""
+    def _clean_text(text: str) -> str:
+        return text.strip().replace(' - ', ' ').replace('- ', '') if text else ""
+    
+    container_type = _clean_text(container_type)
+    size = _clean_text(size)
     
     if container_type and size:
-        # Убираем тире, если есть
-        result = f"{container_type} {size}".replace(' - ', ' ').replace('- ', '').strip()
-        return result
+        return f"{container_type} {size}".strip()
     elif container_type:
-        return container_type.replace(' - ', ' ').replace('- ', '').strip()
+        return container_type
     elif size:
-        return size.replace(' - ', ' ').replace('- ', '').strip()
-    else:
-        return "шт"
+        return size
+    return "шт"
 
 
 def calculate_working_days(start_date: datetime, days: int) -> datetime:

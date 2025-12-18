@@ -8,9 +8,10 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 from modules.styles.general_styles import (
-    apply_label_style, apply_input_style, apply_button_style, COLORS
+    apply_label_style, apply_input_style, apply_button_style
 )
 from modules.styles.ui_config import configure_dialog
+from modules.styles.kp_styles import apply_kp_dialog_style
 
 
 class NameEditDialog(QDialog):
@@ -60,11 +61,7 @@ class NameEditDialog(QDialog):
         layout.addWidget(button_box)
         
         # Стиль диалога
-        self.setStyleSheet(f"""
-            QDialog {{
-                background: {COLORS['white']};
-            }}
-        """)
+        apply_kp_dialog_style(self)
     
     def validate_and_accept(self):
         """Валидация и принятие изменений"""

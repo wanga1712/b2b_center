@@ -29,41 +29,37 @@ class DocumentSelector:
     def choose_documents(self, documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Выбор документов для обработки:
-        - Документы со словом «смета» в названии/ссылке
-        - Все Excel файлы (.xlsx, .xls)
+        - ВСЕ документы и архивы к закупке (без фильтрации по типу)
+        - Обработка будет происходить в зависимости от расширения файла
         """
         matches: List[Dict[str, Any]] = []
         seen_docs = set()
         
         for doc in documents:
-            file_name = (doc.get("file_name") or "").lower()
-            link = (doc.get("document_links") or "").lower()
-            combined = f"{file_name} {link}"
+            file_name = doc.get("file_name") or ""
+            link = doc.get("document_links") or ""
             
-            doc_key = (doc.get("file_name"), doc.get("document_links"))
+            # Пропускаем документы без имени и ссылки
+            if not file_name and not link:
+                logger.debug(f"Пропущен документ без имени и ссылки: {doc.get('id')}")
+                continue
+            
+            doc_key = (file_name, link)
             if doc_key in seen_docs:
                 continue
             seen_docs.add(doc_key)
             
-            logger.debug(f"Проверка документа: file_name='{file_name}', link='{link}'")
-            
-            is_smeta_doc = self.KEYWORD_PATTERN.search(combined)
-            is_excel_file = file_name.endswith((".xlsx", ".xls")) or link.endswith((".xlsx", ".xls"))
-            
-            if is_smeta_doc or is_excel_file:
-                matches.append(doc)
-                logger.debug(
-                    f"Документ выбран: {doc.get('file_name')} "
-                    f"(смета: {bool(is_smeta_doc)}, Excel: {bool(is_excel_file)})"
-                )
+            # Принимаем ВСЕ документы - обработка будет по расширению
+            matches.append(doc)
+            logger.debug(f"Документ выбран для скачивания: {file_name or link}")
 
         if not matches:
             raise DocumentSearchError(
-                "Не найден документ со словом «смета» или Excel файл (.xlsx, .xls)."
+                "Не найдено документов для обработки."
             )
 
         matches.sort(key=self._document_priority)
-        logger.info(f"Выбрано документов для анализа: {len(matches)}")
+        logger.info(f"Выбрано документов для скачивания и анализа: {len(matches)}")
         for doc in matches:
             logger.info(f"  - {doc.get('file_name') or doc.get('document_links')}")
         return matches
