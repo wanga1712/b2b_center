@@ -20,7 +20,8 @@ from loguru import logger
 
 from modules.styles.general_styles import (
     apply_label_style, apply_frame_style, apply_input_style, apply_button_style,
-    apply_scroll_area_style, apply_list_widget_style, apply_text_style_light_italic
+    apply_scroll_area_style, apply_list_widget_style, apply_text_style_light_italic,
+    COLORS, SIZES, FONT_SIZES
 )
 
 from modules.bids.settings_okpd_manager import OKPDManager
@@ -70,377 +71,108 @@ class BidsSettingsTab(QWidget):
         self.categories_manager = CategoriesManager(self.tender_repo, self.user_id)
         
         self.init_ui()
+        self._settings_loaded_from_db = False
         self._init_settings_data()
         self._is_initializing = False
     
     def init_ui(self):
-        """Инициализация пользовательского интерфейса"""
+        """Инициализация пользовательского интерфейса в стиле Salesforce"""
+        from modules.bids.salesforce_settings_ui import create_salesforce_section_card
+        
         # Создаем контейнер с прокруткой для всей вкладки
         scroll_widget = QWidget()
         settings_layout = QVBoxLayout(scroll_widget)
-        settings_layout.setContentsMargins(20, 20, 20, 20)
-        settings_layout.setSpacing(15)
+        settings_layout.setContentsMargins(30, 30, 30, 30)
+        settings_layout.setSpacing(20)
         
         # Создаем ScrollArea для прокрутки всего контента
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setWidget(scroll_widget)
-        apply_scroll_area_style(scroll_area, 'subtle')
+        scroll_area.setStyleSheet(
+            f"QScrollArea {{ border: none; background: {COLORS.get('background', COLORS['secondary'])}; }}"
+        )
         
         tab_layout = QVBoxLayout(self)
         tab_layout.setContentsMargins(0, 0, 0, 0)
         tab_layout.setSpacing(0)
         tab_layout.addWidget(scroll_area)
         
-        # Заголовок
-        settings_label = QLabel("Настройки закупок")
-        apply_label_style(settings_label, 'h2')
-        settings_layout.addWidget(settings_label)
+        # Заголовок в стиле Salesforce
+        header_layout = QVBoxLayout()
+        header_layout.setSpacing(5)
         
-        # Раздел фильтрации по категории
-        self._create_category_filter_section(settings_layout)
+        settings_label = QLabel("⚙️ Настройки поиска закупок")
+        settings_label.setStyleSheet(
+            f"font-size: {FONT_SIZES['h1']}; font-weight: bold; color: {COLORS['text_dark']};"
+        )
+        header_layout.addWidget(settings_label)
         
-        # Раздел выбора ОКПД
-        self._create_okpd_section(settings_layout)
+        subtitle_label = QLabel("Настройте параметры поиска и фильтрации закупок")
+        subtitle_label.setStyleSheet(
+            f"font-size: {FONT_SIZES['normal']}; color: {COLORS['text_light']};"
+        )
+        header_layout.addWidget(subtitle_label)
         
-        # Раздел управления категориями ОКПД
-        self._create_categories_section(settings_layout)
+        settings_layout.addLayout(header_layout)
         
-        # Раздел добавленных ОКПД
-        self._create_added_okpd_section(settings_layout)
+        # Разделитель
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet(f"background: {COLORS['border']}; max-height: 2px; margin: 10px 0;")
+        settings_layout.addWidget(separator)
         
-        # Раздел стоп-слов
-        self._create_stop_words_section(settings_layout)
-
-        # Раздел стоп-фраз анализа документации
-        self._create_document_stop_phrases_section(settings_layout)
+        # Создаем все секции используя билдер
+        from modules.bids.settings_ui_builders.sections_builder import SettingsSectionsBuilder
         
-        # Кнопка показать тендеры
-        self._create_show_tenders_section(settings_layout)
+        # Фильтрация по категории
+        widgets1 = SettingsSectionsBuilder.build_category_filter_section(settings_layout)
+        self.category_filter_combo = widgets1['category_filter_combo']
+        self.category_filter_combo.currentIndexChanged.connect(self.on_category_filter_changed)
+        
+        # Выбор ОКПД
+        widgets2 = SettingsSectionsBuilder.build_okpd_section(settings_layout)
+        self.region_combo = widgets2['region_combo']
+        self.okpd_search_input = widgets2['okpd_search_input']
+        self.okpd_results_list = widgets2['okpd_results_list']
+        widgets2['btn_add_okpd'].clicked.connect(self.handle_add_okpd)
+        self.okpd_search_input.textChanged.connect(self.on_okpd_search_changed)
+        
+        # Управление категориями
+        widgets3 = SettingsSectionsBuilder.build_categories_section(settings_layout)
+        self.categories_list = widgets3['categories_list']
+        widgets3['btn_create_category'].clicked.connect(self.handle_create_category)
+        widgets3['btn_rename_category'].clicked.connect(self.handle_rename_category)
+        widgets3['btn_delete_category'].clicked.connect(self.handle_delete_category)
+        widgets3['btn_assign_category'].clicked.connect(self.handle_assign_category)
+        
+        # Добавленные ОКПД
+        widgets4 = SettingsSectionsBuilder.build_added_okpd_section(settings_layout)
+        self.added_okpd_container = widgets4['added_okpd_container']
+        self.added_okpd_layout = widgets4['added_okpd_layout']
+        
+        # Стоп-слова
+        widgets5 = SettingsSectionsBuilder.build_stop_words_section(settings_layout)
+        self.stop_word_input = widgets5['stop_word_input']
+        self.stop_words_container = widgets5['stop_words_container']
+        self.stop_words_layout = widgets5['stop_words_layout']
+        widgets5['btn_add_stop_word'].clicked.connect(self.handle_add_stop_words)
+        
+        # Стоп-фразы для документов
+        widgets6 = SettingsSectionsBuilder.build_document_stop_phrases_section(settings_layout)
+        self.document_stop_phrase_input = widgets6['document_stop_phrase_input']
+        self.document_stop_phrases_container = widgets6['document_stop_phrases_container']
+        self.document_stop_phrases_layout = widgets6['document_stop_phrases_layout']
+        widgets6['btn_add_phrase'].clicked.connect(self.handle_add_document_stop_phrases)
+        
+        # Кнопки применения настроек
+        widgets7 = SettingsSectionsBuilder.build_show_tenders_section(settings_layout)
+        widgets7['btn_update_data'].clicked.connect(self.handle_update_data)
+        widgets7['btn_save_settings'].clicked.connect(self.handle_save_settings)
+        widgets7['btn_back'].clicked.connect(self.handle_back_to_dashboard)
         
         # Загружаем регионы после создания всех элементов
         self._init_regions()
-    
-    def _create_category_filter_section(self, parent_layout: QVBoxLayout):
-        """Создание раздела фильтрации по категории"""
-        filter_category_frame = QFrame()
-        apply_frame_style(filter_category_frame, 'content')
-        filter_category_layout = QVBoxLayout(filter_category_frame)
-        filter_category_layout.setContentsMargins(15, 15, 15, 15)
-        filter_category_layout.setSpacing(10)
-        
-        filter_category_title = QLabel("Фильтрация закупок по категории")
-        apply_label_style(filter_category_title, 'h3')
-        filter_category_layout.addWidget(filter_category_title)
-        
-        filter_category_info = QLabel(
-            "Выберите категорию ОКПД для фильтрации закупок. "
-            "Будут показаны только закупки с ОКПД кодами из выбранной категории."
-        )
-        apply_label_style(filter_category_info, 'small')
-        apply_text_style_light_italic(filter_category_info)
-        filter_category_info.setWordWrap(True)
-        filter_category_layout.addWidget(filter_category_info)
-        
-        category_filter_layout = QHBoxLayout()
-        category_filter_layout.setSpacing(10)
-        
-        category_filter_label = QLabel("Категория:")
-        apply_label_style(category_filter_label, 'normal')
-        category_filter_label.setMinimumWidth(80)
-        category_filter_layout.addWidget(category_filter_label)
-        
-        self.category_filter_combo = QComboBox()
-        self.category_filter_combo.setMinimumWidth(300)
-        apply_input_style(self.category_filter_combo)
-        self.category_filter_combo.addItem("Все категории", None)
-        self.category_filter_combo.currentIndexChanged.connect(self.on_category_filter_changed)
-        category_filter_layout.addWidget(self.category_filter_combo)
-        
-        category_filter_layout.addStretch()
-        filter_category_layout.addLayout(category_filter_layout)
-        
-        parent_layout.addWidget(filter_category_frame)
-    
-    def _create_okpd_section(self, parent_layout: QVBoxLayout):
-        """Создание раздела выбора ОКПД"""
-        okpd_frame = QFrame()
-        apply_frame_style(okpd_frame, 'content')
-        okpd_layout = QVBoxLayout(okpd_frame)
-        okpd_layout.setContentsMargins(15, 15, 15, 15)
-        okpd_layout.setSpacing(10)
-        
-        okpd_title = QLabel("Выбор кодов ОКПД")
-        apply_label_style(okpd_title, 'h3')
-        okpd_layout.addWidget(okpd_title)
-        
-        # Фильтр по региону
-        region_layout = QHBoxLayout()
-        region_layout.setSpacing(10)
-        
-        region_label = QLabel("Регион:")
-        apply_label_style(region_label, 'normal')
-        region_label.setMinimumWidth(60)
-        region_layout.addWidget(region_label)
-        
-        self.region_combo = QComboBox()
-        self.region_combo.setMinimumWidth(300)
-        apply_input_style(self.region_combo)
-        region_layout.addWidget(self.region_combo)
-        
-        region_layout.addStretch()
-        okpd_layout.addLayout(region_layout)
-        
-        # Поле поиска ОКПД
-        search_layout = QHBoxLayout()
-        search_layout.setSpacing(10)
-        
-        self.okpd_search_input = QLineEdit()
-        self.okpd_search_input.setPlaceholderText("Введите код ОКПД или название для поиска...")
-        apply_input_style(self.okpd_search_input)
-        self.okpd_search_input.textChanged.connect(self.on_okpd_search_changed)
-        search_layout.addWidget(self.okpd_search_input)
-        
-        btn_add_okpd = QPushButton("Добавить")
-        apply_button_style(btn_add_okpd, 'primary')
-        btn_add_okpd.clicked.connect(self.handle_add_okpd)
-        search_layout.addWidget(btn_add_okpd)
-        
-        okpd_layout.addLayout(search_layout)
-        
-        # Список найденных ОКПД
-        results_label = QLabel("Доступные коды ОКПД для добавления:")
-        apply_label_style(results_label, 'normal')
-        okpd_layout.addWidget(results_label)
-        
-        self.okpd_results_list = QListWidget()
-        self.okpd_results_list.setMinimumHeight(300)
-        self.okpd_results_list.setMaximumHeight(400)
-        apply_list_widget_style(self.okpd_results_list)
-        okpd_layout.addWidget(self.okpd_results_list)
-        
-        parent_layout.addWidget(okpd_frame)
-    
-    def _create_categories_section(self, parent_layout: QVBoxLayout):
-        """Создание раздела управления категориями ОКПД"""
-        categories_frame = QFrame()
-        apply_frame_style(categories_frame, 'content')
-        categories_layout = QVBoxLayout(categories_frame)
-        categories_layout.setContentsMargins(15, 15, 15, 15)
-        categories_layout.setSpacing(10)
-        
-        categories_title = QLabel("Категории ОКПД")
-        apply_label_style(categories_title, 'h3')
-        categories_layout.addWidget(categories_title)
-        
-        categories_info = QLabel(
-            "Создавайте категории для группировки ОКПД кодов (например: компьютеры, стройка, проекты). "
-            "При выборе категории в поиске закупок будут отображаться только закупки с ОКПД кодами из этой категории."
-        )
-        apply_label_style(categories_info, 'small')
-        apply_text_style_light_italic(categories_info)
-        categories_info.setWordWrap(True)
-        categories_layout.addWidget(categories_info)
-        
-        # Управление категориями
-        category_management_layout = QHBoxLayout()
-        category_management_layout.setSpacing(10)
-        
-        self.category_name_input = QLineEdit()
-        self.category_name_input.setPlaceholderText("Название категории (например: компьютеры)")
-        apply_input_style(self.category_name_input)
-        category_management_layout.addWidget(self.category_name_input)
-        
-        btn_create_category = QPushButton("Создать категорию")
-        apply_button_style(btn_create_category, 'primary')
-        btn_create_category.clicked.connect(self.handle_create_category)
-        category_management_layout.addWidget(btn_create_category)
-        
-        categories_layout.addLayout(category_management_layout)
-        
-        # Список категорий
-        categories_list_label = QLabel("Существующие категории:")
-        apply_label_style(categories_list_label, 'normal')
-        categories_layout.addWidget(categories_list_label)
-        
-        self.categories_list = QListWidget()
-        self.categories_list.setMinimumHeight(150)
-        self.categories_list.setMaximumHeight(300)
-        apply_list_widget_style(self.categories_list)
-        categories_layout.addWidget(self.categories_list)
-        
-        # Кнопки управления категорией
-        category_actions_layout = QHBoxLayout()
-        category_actions_layout.setSpacing(10)
-        
-        btn_delete_category = QPushButton("Удалить категорию")
-        apply_button_style(btn_delete_category, 'secondary')
-        btn_delete_category.clicked.connect(self.handle_delete_category)
-        category_actions_layout.addWidget(btn_delete_category)
-        
-        category_actions_layout.addStretch()
-        categories_layout.addLayout(category_actions_layout)
-        
-        parent_layout.addWidget(categories_frame)
-    
-    def _create_added_okpd_section(self, parent_layout: QVBoxLayout):
-        """Создание раздела добавленных ОКПД"""
-        added_frame = QFrame()
-        apply_frame_style(added_frame, 'content')
-        added_layout = QVBoxLayout(added_frame)
-        added_layout.setContentsMargins(15, 15, 15, 15)
-        added_layout.setSpacing(10)
-        
-        added_title = QLabel("Добавленные коды ОКПД")
-        apply_label_style(added_title, 'h3')
-        added_layout.addWidget(added_title)
-        
-        self.added_okpd_container = QWidget()
-        self.added_okpd_layout = QVBoxLayout(self.added_okpd_container)
-        self.added_okpd_layout.setSpacing(8)
-        self.added_okpd_layout.setContentsMargins(0, 0, 0, 0)
-        
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setWidget(self.added_okpd_container)
-        scroll_area.setMinimumHeight(200)
-        scroll_area.setMaximumHeight(500)
-        apply_scroll_area_style(scroll_area, 'card')
-        added_layout.addWidget(scroll_area)
-        
-        parent_layout.addWidget(added_frame)
-    
-    def _create_stop_words_section(self, parent_layout: QVBoxLayout):
-        """Создание раздела стоп-слов"""
-        stop_words_frame = QFrame()
-        apply_frame_style(stop_words_frame, 'content')
-        stop_words_layout = QVBoxLayout(stop_words_frame)
-        stop_words_layout.setContentsMargins(15, 15, 15, 15)
-        stop_words_layout.setSpacing(10)
-        
-        stop_words_title = QLabel("Стоп-слова")
-        apply_label_style(stop_words_title, 'h3')
-        stop_words_layout.addWidget(stop_words_title)
-        
-        stop_words_info = QLabel(
-            "Стоп-слова используются для фильтрации закупок. "
-            "Закупки, содержащие стоп-слова, будут исключены из результатов."
-        )
-        apply_label_style(stop_words_info, 'small')
-        apply_text_style_light_italic(stop_words_info)
-        stop_words_info.setWordWrap(True)
-        stop_words_layout.addWidget(stop_words_info)
-        
-        # Поле ввода новых стоп-слов
-        input_layout = QHBoxLayout()
-        input_layout.setSpacing(10)
-        
-        self.stop_words_input = QLineEdit()
-        self.stop_words_input.setPlaceholderText("Введите стоп-слово или несколько через запятую...")
-        apply_input_style(self.stop_words_input)
-        input_layout.addWidget(self.stop_words_input)
-        
-        btn_add_stop_word = QPushButton("Добавить")
-        apply_button_style(btn_add_stop_word, 'primary')
-        btn_add_stop_word.clicked.connect(self.handle_add_stop_words)
-        input_layout.addWidget(btn_add_stop_word)
-        
-        stop_words_layout.addLayout(input_layout)
-        
-        # Контейнер для отображения добавленных стоп-слов
-        self.stop_words_container = QWidget()
-        self.stop_words_layout = QVBoxLayout(self.stop_words_container)
-        self.stop_words_layout.setSpacing(8)
-        self.stop_words_layout.setContentsMargins(0, 0, 0, 0)
-        
-        stop_words_scroll = QScrollArea()
-        stop_words_scroll.setWidgetResizable(True)
-        stop_words_scroll.setWidget(self.stop_words_container)
-        stop_words_scroll.setMinimumHeight(200)
-        stop_words_scroll.setMaximumHeight(400)
-        apply_scroll_area_style(stop_words_scroll, 'card')
-        stop_words_layout.addWidget(stop_words_scroll)
-        
-        parent_layout.addWidget(stop_words_frame)
-
-    def _create_document_stop_phrases_section(self, parent_layout: QVBoxLayout):
-        """Создание раздела стоп-фраз для анализа документации."""
-        stop_phrases_frame = QFrame()
-        apply_frame_style(stop_phrases_frame, 'content')
-        stop_phrases_layout = QVBoxLayout(stop_phrases_frame)
-        stop_phrases_layout.setContentsMargins(15, 15, 15, 15)
-        stop_phrases_layout.setSpacing(10)
-
-        stop_phrases_title = QLabel("Стоп-фразы для анализа документации")
-        apply_label_style(stop_phrases_title, 'h3')
-        stop_phrases_layout.addWidget(stop_phrases_title)
-
-        stop_phrases_info = QLabel(
-            "Стоп-фразы используются при поиске товаров в сметах и другой "
-            "документации. Если в тексте строки присутствует одна из стоп-фраз, "
-            "эта строка не будет учитываться как совпадение с товаром."
-        )
-        apply_label_style(stop_phrases_info, 'small')
-        apply_text_style_light_italic(stop_phrases_info)
-        stop_phrases_info.setWordWrap(True)
-        stop_phrases_layout.addWidget(stop_phrases_info)
-
-        input_layout = QHBoxLayout()
-        input_layout.setSpacing(10)
-
-        self.document_stop_phrases_input = QLineEdit()
-        self.document_stop_phrases_input.setPlaceholderText(
-            "Введите стоп-фразу или несколько через запятую..."
-        )
-        apply_input_style(self.document_stop_phrases_input)
-        input_layout.addWidget(self.document_stop_phrases_input)
-
-        btn_add_stop_phrase = QPushButton("Добавить")
-        apply_button_style(btn_add_stop_phrase, 'primary')
-        btn_add_stop_phrase.clicked.connect(self.handle_add_document_stop_phrases)
-        input_layout.addWidget(btn_add_stop_phrase)
-
-        stop_phrases_layout.addLayout(input_layout)
-
-        self.document_stop_phrases_container = QWidget()
-        self.document_stop_phrases_layout = QVBoxLayout(self.document_stop_phrases_container)
-        self.document_stop_phrases_layout.setSpacing(8)
-        self.document_stop_phrases_layout.setContentsMargins(0, 0, 0, 0)
-
-        stop_phrases_scroll = QScrollArea()
-        stop_phrases_scroll.setWidgetResizable(True)
-        stop_phrases_scroll.setWidget(self.document_stop_phrases_container)
-        stop_phrases_scroll.setMinimumHeight(150)
-        stop_phrases_scroll.setMaximumHeight(350)
-        apply_scroll_area_style(stop_phrases_scroll, 'card')
-        stop_phrases_layout.addWidget(stop_phrases_scroll)
-
-        parent_layout.addWidget(stop_phrases_frame)
-    
-    def _create_show_tenders_section(self, parent_layout: QVBoxLayout):
-        """Создание раздела кнопки показать тендеры"""
-        show_tenders_frame = QFrame()
-        apply_frame_style(show_tenders_frame, 'content')
-        show_tenders_layout = QVBoxLayout(show_tenders_frame)
-        show_tenders_layout.setContentsMargins(15, 15, 15, 15)
-        show_tenders_layout.setSpacing(10)
-        
-        show_tenders_info = QLabel(
-            "После настройки фильтров нажмите кнопку ниже, "
-            "чтобы загрузить закупки по выбранным критериям."
-        )
-        apply_label_style(show_tenders_info, 'small')
-        apply_text_style_light_italic(show_tenders_info)
-        show_tenders_info.setWordWrap(True)
-        show_tenders_layout.addWidget(show_tenders_info)
-        
-        btn_show_tenders = QPushButton("🔍 Показать тендеры")
-        apply_button_style(btn_show_tenders, 'primary')
-        btn_show_tenders.clicked.connect(self.handle_show_tenders)
-        btn_show_tenders.setMinimumHeight(50)
-        show_tenders_layout.addWidget(btn_show_tenders)
-        
-        parent_layout.addWidget(show_tenders_frame)
     
     def _init_regions(self):
         """Инициализация регионов"""
@@ -458,13 +190,58 @@ class BidsSettingsTab(QWidget):
         """Инициализация данных после построения интерфейса"""
         try:
             logger.info("Инициализация данных настроек (ОКПД, категории, стоп-слова, стоп-фразы документации)")
+            
+            # Загружаем сохраненные настройки пользователя из БД
+            self._load_user_settings_from_db()
+            
+            # Загружаем регионы (внутри вызывается _restore_region_from_cache)
+            self.load_regions()
+            
             self.load_okpd_codes()
+            # Загружаем категории (внутри вызывается _restore_category_from_cache)
             self.load_okpd_categories()
             self.load_user_okpd_codes()
             self.load_user_stop_words()
             self.load_document_stop_phrases()
         except Exception as e:
             logger.error(f"Ошибка при инициализации данных настроек: {e}")
+    
+    def _load_user_settings_from_db(self) -> None:
+        """Загрузка сохраненных настроек пользователя из БД"""
+        try:
+            if not self.tender_repo or not hasattr(self.tender_repo, 'get_user_search_settings'):
+                logger.debug("Репозиторий не поддерживает загрузку настроек поиска")
+                return
+            
+            settings = self.tender_repo.get_user_search_settings(self.user_id)
+            if settings:
+                region_id = settings.get('region_id')
+                category_id = settings.get('category_id')
+                
+                # Сохраняем в кэш
+                if self.search_params_cache:
+                    if region_id is not None:
+                        # Загружаем данные региона для кэша
+                        regions = self.tender_repo.get_all_regions()
+                        region_data = next((r for r in regions if r.get('id') == region_id), None)
+                        self.search_params_cache.save_region(region_id, region_data)
+                    
+                    if category_id is not None:
+                        self.search_params_cache.save_category(category_id)
+                    
+                    # Устанавливаем флаг, что настройки были сохранены
+                    self.search_params_cache.set_settings_saved(True)
+                    
+                    logger.info(f"Настройки поиска загружены из БД для пользователя {self.user_id}: region_id={region_id}, category_id={category_id}")
+                    
+                    # Устанавливаем флаг для восстановления в UI после загрузки регионов и категорий
+                    self._settings_loaded_from_db = True
+                else:
+                    logger.warning("search_params_cache не инициализирован")
+            else:
+                logger.debug(f"Настройки поиска не найдены в БД для пользователя {self.user_id}")
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке настроек поиска из БД: {e}", exc_info=True)
     
     def load_okpd_codes(self, search_text: Optional[str] = None):
         """Загрузка списка ОКПД кодов с учетом выбранного региона"""
@@ -753,10 +530,10 @@ class BidsSettingsTab(QWidget):
 
     def handle_add_document_stop_phrases(self):
         """Обработка добавления стоп-фраз анализа документации."""
-        if hasattr(self, 'document_stop_phrases_input'):
-            input_text = self.document_stop_phrases_input.text()
+        if hasattr(self, 'document_stop_phrase_input'):
+            input_text = self.document_stop_phrase_input.text()
             self.document_stop_phrases_manager.add_stop_phrases(input_text, self.parent_widget)
-            self.document_stop_phrases_input.clear()
+            self.document_stop_phrase_input.clear()
             self.load_document_stop_phrases()
 
     def handle_remove_document_stop_phrase(self, phrase_id: int):
@@ -850,12 +627,132 @@ class BidsSettingsTab(QWidget):
     
     def handle_create_category(self):
         """Обработка создания новой категории ОКПД"""
-        if hasattr(self, 'category_name_input'):
-            category_name = self.category_name_input.text()
-            category_id = self.categories_manager.create_category(category_name, self.parent_widget)
+        from PyQt5.QtWidgets import QInputDialog
+        
+        category_name, ok = QInputDialog.getText(
+            self.parent_widget,
+            "Создание категории",
+            "Введите название категории:"
+        )
+        
+        if ok and category_name.strip():
+            category_id = self.categories_manager.create_category(category_name.strip(), self.parent_widget)
             if category_id:
-                self.category_name_input.clear()
                 self.load_okpd_categories()
+    
+    def handle_rename_category(self):
+        """Обработка переименования категории ОКПД"""
+        from PyQt5.QtWidgets import QInputDialog, QMessageBox
+        
+        if not hasattr(self, 'categories_list'):
+            return
+        
+        current_item = self.categories_list.currentItem()
+        if not current_item:
+            QMessageBox.warning(self.parent_widget, "Предупреждение", "Выберите категорию для переименования")
+            return
+        
+        category_data = current_item.data(Qt.UserRole)
+        if not category_data:
+            return
+        
+        old_name = category_data.get('name', '')
+        new_name, ok = QInputDialog.getText(
+            self.parent_widget,
+            "Переименование категории",
+            "Новое название:",
+            text=old_name
+        )
+        
+        if ok and new_name.strip():
+            # Используем репозиторий для обновления категории
+            success = self.tender_repo.update_okpd_category(
+                category_id=category_data.get('id'),
+                user_id=self.user_id,
+                name=new_name.strip()
+            )
+            if success:
+                self.load_okpd_categories()
+            else:
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(self.parent_widget, "Ошибка", "Не удалось переименовать категорию")
+    
+    def handle_assign_category(self):
+        """Обработка назначения категории выбранному ОКПД"""
+        # Получаем выбранный ОКПД из контейнера
+        # Нужно найти выбранный элемент (через фокус или через клик)
+        # Для простоты используем диалог выбора из списка добавленных ОКПД
+        from PyQt5.QtWidgets import QInputDialog, QMessageBox
+        
+        if not hasattr(self, 'added_okpd_layout'):
+            return
+        
+        # Получаем список добавленных ОКПД
+        try:
+            user_okpd = self.tender_repo.get_user_okpd_codes(self.user_id)
+            if not user_okpd:
+                QMessageBox.information(self.parent_widget, "Информация", "Нет добавленных ОКПД кодов")
+                return
+            
+            # Создаем список для выбора
+            okpd_list = [f"{okpd.get('okpd_code', '')} - {okpd.get('okpd_name', 'Без названия')[:50]}" for okpd in user_okpd]
+            selected, ok = QInputDialog.getItem(
+                self.parent_widget,
+                "Выбор ОКПД",
+                "Выберите ОКПД для назначения категории:",
+                okpd_list,
+                0,
+                False
+            )
+            
+            if not ok:
+                return
+            
+            # Находим выбранный ОКПД
+            selected_index = okpd_list.index(selected)
+            selected_okpd = user_okpd[selected_index]
+            okpd_id = selected_okpd['id']
+            okpd_code = selected_okpd.get('okpd_code', '')
+            
+            # Получаем категории
+            categories = self.tender_repo.get_okpd_categories(self.user_id)
+            if not categories:
+                QMessageBox.information(self.parent_widget, "Информация", "Нет созданных категорий")
+                return
+            
+            category_names = [cat.get('name', 'Без названия') for cat in categories]
+            category_names.insert(0, "Без категории")
+            
+            selected_category, ok = QInputDialog.getItem(
+                self.parent_widget,
+                "Выбор категории",
+                f"Выберите категорию для ОКПД {okpd_code}:",
+                category_names,
+                0,
+                False
+            )
+            
+            if ok and selected_category != "Без категории":
+                category_id = None
+                for cat in categories:
+                    if cat.get('name') == selected_category:
+                        category_id = cat.get('id')
+                        break
+                
+                if category_id:
+                    success = self.tender_repo.assign_okpd_to_category(
+                        user_id=self.user_id,
+                        okpd_id=okpd_id,
+                        category_id=category_id
+                    )
+                    if success:
+                        QMessageBox.information(self.parent_widget, "Успех", f"Категория назначена ОКПД {okpd_code}")
+                        self.load_user_okpd_codes()
+                    else:
+                        QMessageBox.warning(self.parent_widget, "Ошибка", "Не удалось назначить категорию")
+        except Exception as e:
+            logger.error(f"Ошибка при назначении категории: {e}", exc_info=True)
+            QMessageBox.warning(self.parent_widget, "Ошибка", f"Ошибка при назначении категории: {str(e)}")
     
     def handle_delete_category(self):
         """Обработка удаления категории ОКПД"""
@@ -865,8 +762,122 @@ class BidsSettingsTab(QWidget):
                 self.load_okpd_categories()
                 self.load_user_okpd_codes()
     
+    def handle_save_settings(self):
+        """Обработка нажатия кнопки 'Сохранить настройки'"""
+        try:
+            # Получаем текущие значения региона и категории из кэша
+            region_id = self.search_params_cache.get_region_id() if hasattr(self, 'search_params_cache') and self.search_params_cache else None
+            category_id = self.search_params_cache.get_category_id() if hasattr(self, 'search_params_cache') and self.search_params_cache else None
+            
+            # Сохраняем настройки в БД
+            if self.tender_repo and hasattr(self.tender_repo, 'save_user_search_settings'):
+                success = self.tender_repo.save_user_search_settings(self.user_id, region_id, category_id)
+                if success:
+                    logger.info(f"Настройки поиска сохранены в БД для пользователя {self.user_id}: region_id={region_id}, category_id={category_id}")
+                else:
+                    logger.warning(f"Не удалось сохранить настройки поиска в БД для пользователя {self.user_id}")
+            
+            # Сохраняем флаг, что настройки были сохранены пользователем
+            if hasattr(self, 'search_params_cache') and self.search_params_cache:
+                self.search_params_cache.set_settings_saved(True)
+            
+            # Показываем уведомление
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.information(
+                self,
+                "Настройки сохранены",
+                "Настройки поиска сохранены.\n\n"
+                "Теперь вы можете перейти в разделы закупок,\n"
+                "и данные будут загружены по вашим настройкам."
+            )
+            
+            # Возвращаемся на Dashboard (НЕ загружаем закупки)
+            if self.parent_widget and hasattr(self.parent_widget, 'stack_widget'):
+                self.parent_widget.stack_widget.setCurrentIndex(0)  # 0 = Dashboard
+            
+            logger.info("Настройки поиска сохранены пользователем, возврат на Dashboard")
+        
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении настроек: {e}", exc_info=True)
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self,
+                "Ошибка",
+                f"Не удалось сохранить настройки:\n{e}"
+            )
+    
+    def handle_update_data(self):
+        """Обработка нажатия кнопки 'Обновить данные' - применяет настройки без сохранения"""
+        try:
+            logger.info("Обновление данных с текущими настройками (без сохранения в БД)")
+            
+            # Обновляем счетчики через родительский виджет
+            if self.parent_widget and hasattr(self.parent_widget, 'handle_show_tenders'):
+                self.parent_widget.handle_show_tenders()
+                logger.info("Данные обновлены успешно")
+                
+                # Показываем уведомление об успешном обновлении
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.information(
+                    self,
+                    "Данные обновлены",
+                    "Счетчики закупок обновлены с текущими настройками.\n\n"
+                    "Настройки не сохранены в БД и будут сброшены после перезапуска."
+                )
+            else:
+                logger.warning("Родительский виджет не поддерживает обновление данных")
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.information(
+                    self,
+                    "Информация",
+                    "Родительский виджет не поддерживает обновление данных.\n\n"
+                    "Настройки не сохранены в БД и будут сброшены после перезапуска."
+                )
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении данных: {e}", exc_info=True)
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self,
+                "Ошибка",
+                f"Не удалось обновить данные:\n{e}"
+            )
+    
+    def handle_back_to_dashboard(self):
+        """Обработка нажатия кнопки 'Назад к дашборду' - возврат без сохранения"""
+        try:
+            logger.info("Возврат на дашборд без сохранения настроек")
+            
+            # Возвращаемся на Dashboard
+            if self.parent_widget and hasattr(self.parent_widget, 'stack_widget'):
+                # Если есть stack_widget (BidsWidget), переключаемся на Dashboard
+                self.parent_widget.stack_widget.setCurrentIndex(0)  # 0 = Dashboard
+                logger.info("Возврат на Dashboard выполнен через stack_widget")
+            elif self.parent_widget and hasattr(self.parent_widget, 'on_back_clicked'):
+                # Если это PurchasesSubmenuWidget, используем его метод для возврата в CRM
+                self.parent_widget.on_back_clicked()
+                logger.info("Возврат через on_back_clicked выполнен")
+            else:
+                # Если настройки встроены в виджет (PurchasesSubmenuWidget), 
+                # просто прокручиваем вверх - настройки уже на дашборде
+                logger.info("Настройки встроены в дашборд, возврат не требуется")
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.information(
+                    self,
+                    "Информация",
+                    "Вы уже находитесь на дашборде закупок.\n\n"
+                    "Настройки не сохранены и будут сброшены после перезапуска."
+                )
+        except Exception as e:
+            logger.error(f"Ошибка при возврате на дашборд: {e}", exc_info=True)
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self,
+                "Ошибка",
+                f"Не удалось вернуться на дашборд:\n{e}"
+            )
+    
     def handle_show_tenders(self):
-        """Обработка нажатия кнопки 'Показать тендеры'"""
+        """Обработка нажатия кнопки 'Показать тендеры' (для обратной совместимости)"""
         if self.parent_widget and hasattr(self.parent_widget, 'handle_show_tenders'):
             self.parent_widget.handle_show_tenders()
     
