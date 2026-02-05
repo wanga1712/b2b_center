@@ -1,4 +1,10 @@
 """
+MODULE: modules.kp.ui_builder
+RESPONSIBILITY: Construct UI elements for KPWidget.
+ALLOWED: PyQt5, dataclasses, typing, modules.styles.*, modules.kp.logic.
+FORBIDDEN: Business logic (only UI construction).
+ERRORS: None.
+
 Построитель UI для виджета коммерческих предложений
 
 Отвечает за создание и настройку пользовательского интерфейса KPWidget.
@@ -30,7 +36,7 @@ from modules.kp.logic import calculate_working_days, format_date_for_display
 
 @dataclass
 class KPUIControls:
-    """Контейнер для всех UI элементов виджета КП"""
+    """Контейнер для всех UI элементов виджета Товаров"""
     # Вкладки
     tabs: QTabWidget
     
@@ -58,7 +64,7 @@ class KPUIControls:
     apply_global_discount: QComboBox
     apply_discount_btn: QPushButton
     
-    # Форма КП
+    # Форма Товаров
     object_name_input: QLineEdit
     company_name_input: QLineEdit
     contact_person_input: QLineEdit
@@ -371,12 +377,12 @@ def _build_kp_form_section(
     conditions_grid.setSpacing(8)
     conditions_grid.setColumnStretch(1, 1)
     
-    # Срок действия КП
+    # Срок действия Товаров
     current_date = datetime.now()
     valid_until_date = calculate_working_days(current_date, 5)
     valid_until_str = format_date_for_display(valid_until_date)
     
-    kp_validity_label = QLabel("Срок действия КП:")
+    kp_validity_label = QLabel("Срок действия Товаров:")
     apply_label_style(kp_validity_label, 'normal')
     conditions_grid.addWidget(kp_validity_label, 0, 0)
     
@@ -589,7 +595,7 @@ def build_kp_ui(
     cart_tab_scroll.setWidget(cart_tab)
     
     # Добавляем вкладки
-    tabs.addTab(main_tab, "Основная")
+    tabs.addTab(main_tab, "Товары")
     tabs.addTab(cart_tab_scroll, "Корзина")
     
     # Применяем единый стиль

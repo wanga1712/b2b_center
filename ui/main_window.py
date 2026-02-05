@@ -1,3 +1,10 @@
+"""
+MODULE: ui.main_window
+RESPONSIBILITY: Main application window and UI orchestration.
+ALLOWED: PyQt5, modules, core.database, config.settings, loguru.
+FORBIDDEN: Business logic implementation (should be delegated to widgets/services).
+ERRORS: None.
+"""
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QPushButton, QStackedWidget, QFrame, QSizePolicy, QApplication
@@ -229,6 +236,21 @@ class MainWindow(QMainWindow):
         # Создаем виджеты заранее для доступа к ним
         self.kp_widget = KPWidget(self.db_manager)
         self.bids_widget = BidsWidget(product_db_manager=self.db_manager)
+        
+        # Воронки продаж с Dashboard
+        tender_db_manager_for_funnels = None
+        if hasattr(self.bids_widget, 'tender_db_manager'):
+            tender_db_manager_for_funnels = self.bids_widget.tender_db_manager
+            logger.info("tender_db_manager передан в SalesFunnelMainWidget")
+        else:
+            logger.warning("tender_db_manager не найден в BidsWidget")
+        
+        from modules.crm.sales_funnel.main_widget import SalesFunnelMainWidget
+        self.sales_funnel_widget = SalesFunnelMainWidget(
+            tender_db_manager=tender_db_manager_for_funnels,
+            user_id=1
+        )
+        
         self.shipping_widget = ShippingWidget()
         self.clients_widget = ClientsWidget()
         self.tasks_widget = TasksWidget()
@@ -268,8 +290,9 @@ class MainWindow(QMainWindow):
         self.bids_widget.setParent(self)
         
         sections = [
-            ('КП 🚀', self.kp_widget),  # Коммерческие предложения
-            ('CRM 📈', self.crm_home_widget),  # CRM (было "Торги")
+            ('Товары 🚀', self.kp_widget),  # Товары
+            ('Закупки 📈', self.bids_widget),  # Управление закупками с Dashboard
+            ('Воронки 🎯', self.sales_funnel_widget),  # Воронки продаж с Dashboard
             ('Отгрузка 🚚', self.shipping_widget),  # Управление отгрузками
             ('Клиенты 👥', self.clients_widget),  # Управление клиентами
             ('Задачи ✅', self.tasks_widget),  # Управление задачами
@@ -388,68 +411,10 @@ class MainWindow(QMainWindow):
         # --------- Единый стиль для области контента -----------
         apply_stacked_style(self.stacked)  # Применяем единый стиль для стекированного виджета
         
-        # Запускаем фоновое обновление статусов закупок с задержкой
-        # Первый запуск через 10 минут после старта, затем каждые 3 часа
-        from PyQt5.QtCore import QTimer
-        self.status_updater_timer = QTimer(self)
-        self.status_updater_timer.timeout.connect(self._start_status_updater)
-        
-        # Первый запуск через 10 минут (600000 мс)
-        INITIAL_DELAY_MS = 10 * 60 * 1000  # 10 минут
-        # Последующие запуски каждые 3 часа (10800000 мс)
-        UPDATE_INTERVAL_MS = 3 * 60 * 60 * 1000  # 3 часа
-        
-        # Запускаем первый раз через 10 минут
-        QTimer.singleShot(INITIAL_DELAY_MS, self._start_status_updater)
-        # Настраиваем периодический запуск каждые 3 часа
-        self.status_updater_timer.setInterval(UPDATE_INTERVAL_MS)
-        self.status_updater_timer.start()
-        
-        logger.info(
-            f"Настроено обновление статусов: первый запуск через 10 минут, "
-            f"затем каждые 3 часа"
-        )
+        # Фоновое обновление статусов закупок отключено по требованию
+        # Ранее: первый запуск через 10 минут после старта, затем каждые 3 часа
     
-    def _start_status_updater(self):
-        """Запуск фонового обновления статусов закупок"""
-        try:
-            # Проверяем, есть ли подключение к tender_monitor БД
-            if hasattr(self.bids_widget, 'tender_db_manager') and self.bids_widget.tender_db_manager:
-                from core.tender_status_updater import TenderStatusUpdater, ensure_status_update_functions
-                
-                # Убеждаемся, что функции обновления статусов созданы в БД
-                if ensure_status_update_functions(self.bids_widget.tender_db_manager):
-                    # Проверяем, не запущен ли уже обновлятель
-                    if hasattr(self, 'status_updater') and self.status_updater and self.status_updater.isRunning():
-                        logger.debug("Обновление статусов уже выполняется, пропускаем")
-                        return
-                    
-                    # Создаем и запускаем обновлятель статусов в фоне
-                    self.status_updater = TenderStatusUpdater(
-                        self.bids_widget.tender_db_manager,
-                        parent=self
-                    )
-                    # Подключаем сигналы для логирования
-                    self.status_updater.status_updated.connect(
-                        lambda results: logger.info(f"Статусы закупок обновлены: {results}")
-                    )
-                    self.status_updater.error_occurred.connect(
-                        lambda error: logger.error(f"Ошибка обновления статусов: {error}")
-                    )
-                    self.status_updater.finished.connect(
-                        lambda: logger.info("Обновление статусов завершено")
-                    )
-                    # Задаем минимальный приоритет фоновой задаче
-                    self.status_updater.setPriority(QThread.LowestPriority)
-                    # Запускаем в фоне
-                    self.status_updater.start()
-                    logger.info("Запущено фоновое обновление статусов закупок")
-                else:
-                    logger.warning("Не удалось создать функции обновления статусов в БД")
-            else:
-                logger.warning("Нет подключения к tender_monitor БД для обновления статусов")
-        except Exception as e:
-            logger.error(f"Ошибка при запуске обновления статусов: {e}", exc_info=True)
+    # Метод _start_status_updater удален - фоновое обновление статусов отключено по требованию
     
     def on_section_clicked(self, index: int):
         """Обработка клика на раздел в боковом меню"""
@@ -505,13 +470,10 @@ class MainWindow(QMainWindow):
                 # Переключаемся на BidsWidget
                 self.stacked.setCurrentIndex(bids_index)
                 
-                # Показываем нужный раздел (без вкладок)
-                if folder_id in ['purchases_44fz_new', 'purchases_223fz_new', 'purchases_44fz_won', 
-                                 'purchases_223fz_won', 'purchases_44fz_commission']:
-                    if hasattr(widget, 'show_section'):
-                        widget.show_section(folder_id)
-                    else:
-                        logger.error(f"BidsWidget не имеет метода show_section")
+                # НЕ показываем конкретный раздел сразу - показываем Dashboard по умолчанию
+                # Пользователь сам выберет раздел из Dashboard плиток
+                # Dashboard уже установлен по умолчанию при инициализации BidsWidget
+                logger.info(f"BidsWidget открыт, показывается Dashboard (пользователь выберет раздел из плиток)")
                 
                 # Обновляем кнопку в меню - переключаемся на CRM, так как BidsWidget теперь часть CRM
                 if self.crm_index is not None:
