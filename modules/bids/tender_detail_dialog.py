@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.tender_detail_dialog
+RESPONSIBILITY: Show detailed tender information in a dialog.
+ALLOWED: PyQt5, typing, loguru, modules.bids.tender_detail_dialog_*, modules.crm.sales_funnel.*.
+FORBIDDEN: Direct SQL outside of Repository/Services.
+ERRORS: None.
+
 Модуль для диалога с полной информацией о закупке.
 """
 
@@ -8,7 +14,7 @@ from loguru import logger
 
 if TYPE_CHECKING:
     from services.document_search_service import DocumentSearchService
-    from services.tender_match_repository import TenderMatchRepository
+    from services.match_services.tender_match_repository_facade import TenderMatchRepositoryFacade as TenderMatchRepository
 
 
 class TenderDetailDialog(QDialog):
@@ -122,30 +128,6 @@ class TenderDetailDialog(QDialog):
     
     def _handle_move_to_funnel(self):
         """Переместить закупку в воронку продаж"""
-        # #region agent log
-        try:
-            from pathlib import Path
-            import json
-            from datetime import datetime
-            log_entry = {
-                "sessionId": "debug-session",
-                "runId": "pre-fix",
-                "hypothesisId": "M1",
-                "location": f"{__file__}:_handle_move_to_funnel:entry",
-                "message": "Начало перемещения закупки в воронку",
-                "data": {
-                    "tender_id": self.tender_data.get("id"),
-                    "has_registry_type": hasattr(self, "registry_type"),
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000),
-            }
-            log_path = Path(__file__).resolve().parents[2] / ".cursor" / "debug.log"
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-        # #endregion
-        
         from modules.crm.sales_funnel.pipeline_selection_dialog import PipelineSelectionDialog
         from modules.crm.sales_funnel.tender_to_funnel_service import TenderToFunnelService
         from modules.crm.sales_funnel import PipelineRepository, DealRepository
@@ -161,30 +143,6 @@ class TenderDetailDialog(QDialog):
         if not registry_type:
             QMessageBox.warning(self, "Ошибка", "Не удалось определить тип реестра")
             return
-        
-        # #region agent log
-        try:
-            from pathlib import Path
-            import json
-            from datetime import datetime
-            log_entry = {
-                "sessionId": "debug-session",
-                "runId": "pre-fix",
-                "hypothesisId": "M2",
-                "location": f"{__file__}:_handle_move_to_funnel:before_db_manager",
-                "message": "Перед получением tender_db_manager",
-                "data": {
-                    "has_parent": self.parent() is not None,
-                    "parent_type": type(self.parent()).__name__ if self.parent() else None,
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000),
-            }
-            log_path = Path(__file__).resolve().parents[2] / ".cursor" / "debug.log"
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-        # #endregion
         
         # Получаем tender_db_manager из родительского виджета или создаем новый
         tender_db_manager = None
@@ -211,50 +169,6 @@ class TenderDetailDialog(QDialog):
                 )
                 return
         
-        # #region agent log
-        try:
-            from pathlib import Path
-            import json
-            from datetime import datetime
-            log_entry = {
-                "sessionId": "debug-session",
-                "runId": "pre-fix",
-                "hypothesisId": "M3",
-                "location": f"{__file__}:_handle_move_to_funnel:after_db_manager",
-                "message": "После получения tender_db_manager",
-                "data": {
-                    "has_db_manager": tender_db_manager is not None,
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000),
-            }
-            log_path = Path(__file__).resolve().parents[2] / ".cursor" / "debug.log"
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-        # #endregion
-        
-        # #region agent log
-        try:
-            from pathlib import Path
-            import json
-            from datetime import datetime
-            log_entry = {
-                "sessionId": "debug-session",
-                "runId": "pre-fix",
-                "hypothesisId": "M4",
-                "location": f"{__file__}:_handle_move_to_funnel:before_dialog",
-                "message": "Перед открытием диалога выбора воронки",
-                "data": {},
-                "timestamp": int(datetime.now().timestamp() * 1000),
-            }
-            log_path = Path(__file__).resolve().parents[2] / ".cursor" / "debug.log"
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-        # #endregion
-        
         # Открываем диалог выбора воронки
         try:
             dialog = PipelineSelectionDialog(self)
@@ -268,29 +182,6 @@ class TenderDetailDialog(QDialog):
             logger.error(f"Ошибка при открытии диалога выбора воронки: {e}", exc_info=True)
             QMessageBox.critical(self, "Ошибка", f"Ошибка при открытии диалога: {str(e)}")
             return
-        
-        # #region agent log
-        try:
-            from pathlib import Path
-            import json
-            from datetime import datetime
-            log_entry = {
-                "sessionId": "debug-session",
-                "runId": "pre-fix",
-                "hypothesisId": "M5",
-                "location": f"{__file__}:_handle_move_to_funnel:after_dialog",
-                "message": "После выбора воронки",
-                "data": {
-                    "selected_pipeline": selected_pipeline.value if selected_pipeline else None,
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000),
-            }
-            log_path = Path(__file__).resolve().parents[2] / ".cursor" / "debug.log"
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-        # #endregion
         
         # Создаем сервис перемещения
         try:
@@ -311,32 +202,6 @@ class TenderDetailDialog(QDialog):
                 user_id = self.parent().bids_widget.current_user_id
         
         logger.info(f"Перемещение закупки в воронку: user_id={user_id}, pipeline_type={selected_pipeline.value}, tender_id={tender_id}")
-        
-        # #region agent log
-        try:
-            from pathlib import Path
-            import json
-            from datetime import datetime
-            log_entry = {
-                "sessionId": "debug-session",
-                "runId": "pre-fix",
-                "hypothesisId": "M6",
-                "location": f"{__file__}:_handle_move_to_funnel:before_move",
-                "message": "Перед перемещением закупки",
-                "data": {
-                    "tender_id": tender_id,
-                    "registry_type": registry_type,
-                    "pipeline_type": selected_pipeline.value,
-                    "user_id": user_id,
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000),
-            }
-            log_path = Path(__file__).resolve().parents[2] / ".cursor" / "debug.log"
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-        # #endregion
         
         # Перемещаем закупку в воронку
         try:

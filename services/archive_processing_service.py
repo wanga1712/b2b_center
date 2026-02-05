@@ -1,233 +1,209 @@
 """
-Сервис для обработки архивов и форматирования результатов поиска.
+MODULE: services.archive_processing_service
+RESPONSIBILITY: Main service for coordinating archive processing with SRP compliance.
+ALLOWED: All archive_runner components, logging, configuration.
+FORBIDDEN: Direct file operations, business logic - delegate to specialized components.
+ERRORS: Use ErrorHandler for all error handling.
+
+Главный сервисный координатор обработки архивов с соблюдением SRP.
+Делегирует всю работу специализированным компонентам.
 """
 
 from __future__ import annotations
 
-from collections import defaultdict
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Sequence, TYPE_CHECKING
+import os
 import time
-import re
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from loguru import logger
 
-from services.helpers.archive_cleanup import ArchiveCleanupManager
+from config.settings import config
+from core.database import DatabaseManager
+from core.tender_database import TenderDatabaseManager
+from core.exceptions import DocumentSearchError, DatabaseConnectionError
 
-if TYPE_CHECKING:
-    from services.document_search_service import DocumentSearchService
+# Импорт всех компонентов archive_runner
+from services.archive_runner.tender_coordinator import TenderCoordinator
+from services.archive_runner.folder_processor import FolderProcessor
+from services.archive_runner.cloud_uploader import CloudUploader
+from services.archive_runner.error_handler import ErrorHandler
+from services.archive_runner.tender_queue_manager import TenderQueueManager
+from services.archive_runner.tender_processor import TenderProcessor
+from services.archive_runner.tender_folder_manager import TenderFolderManager
+from services.archive_runner.processed_tenders_repository import ProcessedTendersRepository
+from services.archive_runner.tender_provider import TenderProvider
+from services.archive_runner.tender_prefetcher import TenderPrefetcher
 
+# Импорт document_search компонентов
+from services.document_search_service import DocumentSearchService
+from services.document_search.document_selector import DocumentSelector
+from services.document_search.document_downloader import DocumentDownloader
+from services.document_search.download_timeout_calculator import create_timeout_calculator
+from services.document_search.archive_extractor import ArchiveExtractor
+from services.document_search.match_finder import MatchFinder
 
-def format_number(value: str) -> str:
-    """Форматирует числа с разделителями разрядов."""
-    if not value:
-        return value
-
-    cleaned = value.strip().replace("\n", " ").replace("\r", " ")
-    number_pattern = r"\d+(?:[.,]\d+)?"
-
-    def _format(match: re.Match) -> str:
-        num = match.group(0)
-        separator = ""
-        if "." in num:
-            integer_part, decimal_part = num.split(".", 1)
-            separator = "."
-        elif "," in num:
-            integer_part, decimal_part = num.split(",", 1)
-            separator = ","
-        else:
-            integer_part, decimal_part = num, ""
-
-        chunks = []
-        for index, digit in enumerate(reversed(integer_part)):
-            if index and index % 3 == 0:
-                chunks.append(" ")
-            chunks.append(digit)
-        formatted_integer = "".join(reversed(chunks))
-        return f"{formatted_integer}{separator}{decimal_part}" if decimal_part else formatted_integer
-
-    return re.sub(number_pattern, _format, cleaned)
-
-
-def find_archives_in_directory(directory: Path) -> Dict[str, List[Path]]:
-    """Находит архивы в директории (включая подпапки) и группирует по базовому имени."""
-    archives: Dict[str, List[Path]] = defaultdict(list)
-    archive_extensions = {".rar", ".zip", ".7z"}
-
-    if not directory.exists():
-        logger.error(f"Директория не существует: {directory}")
-        return archives
-
-    for file_path in directory.rglob("*"):
-        if not file_path.is_file():
-            continue
-        suffix = file_path.suffix.lower()
-        if suffix not in archive_extensions:
-            continue
-        base_name = _extract_base_name(file_path.name)
-        archives[base_name].append(file_path)
-
-    for base_name in archives:
-        archives[base_name].sort(key=lambda p: _extract_part_number(p.name))
-
-    return archives
-
-
-def _extract_base_name(filename: str) -> str:
-    name_without_ext = Path(filename).stem
-    patterns = [
-        r"\.part\d+$",
-        r"\.part\s*\d+$",
-        r"[._-]\d+$",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, name_without_ext, re.IGNORECASE)
-        if match:
-            return name_without_ext[: match.start()].strip("._-")
-    return name_without_ext
-
-
-def _extract_part_number(filename: str) -> int:
-    name_without_ext = Path(filename).stem
-    patterns = [
-        r"\.part(\d+)$",
-        r"\.part\s*(\d+)$",
-        r"[._-](\d+)$",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, name_without_ext, re.IGNORECASE)
-        if match:
-            return int(match.group(1))
-    return 0
-
-
-@dataclass
-class ArchiveGroupResult:
-    base_name: str
-    workbook_paths: List[Path]
-    matches: List[Dict[str, Any]]
-    extract_dirs: List[Path]
-    processing_time: float
-    total_size: float
+# Импорт репозиториев
+from services.tender_services.tender_repository_facade import TenderRepositoryFacade
+from services.match_services.tender_match_repository_facade import TenderMatchRepositoryFacade
 
 
 class ArchiveProcessingService:
-    """Повторно используемая логика обработки архивов."""
+    """
+    Главный сервис обработки архивов с соблюдением SRP.
+    Координирует работу всех специализированных компонентов.
+    """
 
     def __init__(
         self,
-        document_service: "DocumentSearchService",
-        cleanup_manager: Optional[ArchiveCleanupManager] = None,
+        tender_db_manager: TenderDatabaseManager,
+        product_db_manager: DatabaseManager,
+        user_id: int = 1,
+        max_workers: int = 2,
+        batch_size: int = 5,
+        batch_delay: float = 10.0,
     ):
-        self.document_service = document_service
-        self.cleanup_manager = cleanup_manager or ArchiveCleanupManager()
+        """Инициализация сервиса с внедрением зависимостей."""
+        self.tender_db_manager = tender_db_manager
+        self.product_db_manager = product_db_manager
+        self.user_id = user_id
+        self.max_workers = max(1, max_workers)
+        self.batch_size = max(1, batch_size)
+        self.batch_delay = max(0.0, batch_delay)
 
-    def process_archive_group(
-        self,
-        base_name: str,
-        archive_paths: Sequence[Path],
-    ) -> ArchiveGroupResult:
-        """Обрабатывает одну группу архивов."""
-        start = time.time()
-        result = self.document_service.debug_process_local_archives(
-            [str(path) for path in archive_paths]
+        # Инициализация всех компонентов
+        self._initialize_components()
+        self._initialize_coordinator()
+
+    def _initialize_components(self) -> None:
+        """Инициализация всех специализированных компонентов."""
+        # Репозитории
+        self.tender_repo = TenderRepositoryFacade(self.tender_db_manager)
+        self.tender_match_repo = TenderMatchRepository(self.tender_db_manager)
+        self.processed_tenders_repo = ProcessedTendersRepository(self.tender_db_manager)
+        self.tender_provider = TenderProvider(self.tender_repo, self.user_id)
+
+        # Настройка путей
+        download_dir = Path(config.document_download_dir) if config.document_download_dir else Path.home() / "Downloads" / "ЕИС_Документация"
+        self.download_dir = download_dir
+        self.download_dir.mkdir(parents=True, exist_ok=True)
+
+        # Сервисы поиска документов
+        self.document_search_service = DocumentSearchService(
+            self.product_db_manager,
+            self.download_dir,
+            unrar_path=config.unrar_tool,
+            winrar_path=config.winrar_path,
         )
-        workbook_paths = [Path(p) for p in result.get("workbook_paths", [])]
-        matches = result.get("matches", [])
-        extract_dirs = [Path(p) for p in result.get("extract_dirs", [])]
+        self.document_search_service.ensure_products_loaded()
 
-        total_size = 0.0
-        for workbook in workbook_paths:
-            if workbook.exists():
-                total_size += workbook.stat().st_size
+        self.selector = DocumentSelector()
+        timeout_calculator = create_timeout_calculator(self.tender_db_manager)
+        self.downloader = DocumentDownloader(
+            self.download_dir,
+            progress_callback=None,
+            timeout_calculator=timeout_calculator
+        )
+        self.extractor = ArchiveExtractor(
+            unrar_path=config.unrar_tool,
+            winrar_path=config.winrar_path,
+        )
 
-        processing_time = time.time() - start
+        # Инициализация MatchFinder
+        document_stop_phrases = self._get_document_stop_phrases()
+        self.match_finder = MatchFinder(
+            self.document_search_service._product_names,
+            stop_phrases=document_stop_phrases,
+            user_search_phrases=[],
+        )
 
+        # Менеджеры и процессоры
+        self.folder_manager = TenderFolderManager(self.download_dir)
+        self.folder_processor = FolderProcessor(self.folder_manager)
+        self.cloud_uploader = CloudUploader(None)  # Яндекс Диск временно отключен
+        self.error_handler = ErrorHandler(max_retries=3, retry_delay=2.0)
+
+    def _initialize_coordinator(self) -> None:
+        """Инициализация координатора обработки тендеров."""
+        self.tender_processor = TenderProcessor(
+            tender_match_repo=self.tender_match_repo,
+            folder_manager=self.folder_manager,
+            document_search_service=self.document_search_service,
+            selector=self.selector,
+            downloader=self.downloader,
+            extractor=self.extractor,
+            match_finder=self.match_finder,
+            file_cleaner=None,  # Будет инициализирован в TenderProcessor
+            processed_tenders_repo=self.processed_tenders_repo,
+            max_workers=self.max_workers,
+            safe_call_func=self.error_handler.safe_call,
+            get_avg_time_func=self._get_average_processing_time_per_file,
+            batch_delay=min(self.batch_delay, 5.0),
+        )
+
+        self.tender_coordinator = TenderCoordinator(
+            folder_processor=self.folder_processor,
+            cloud_uploader=self.cloud_uploader,
+            error_handler=self.error_handler,
+            queue_manager=TenderQueueManager(),
+            max_workers=self.max_workers
+        )
+
+    def _get_document_stop_phrases(self) -> List[str]:
+        """Получение стоп-фраз для анализа документации."""
         try:
-            self.cleanup_manager.cleanup(
-                archive_paths,
-                extract_dirs,
-                matches,
-            )
-        except Exception as error:
-            logger.warning(f"Не удалось очистить файлы архива {base_name}: {error}")
+            document_stop_phrases_rows = getattr(self.tender_repo, "get_document_stop_phrases", lambda _uid: [])(self.user_id)
+            return [
+                row.get("phrase", "").strip()
+                for row in document_stop_phrases_rows
+                if row.get("phrase")
+            ]
+        except Exception:
+            return []
 
-        return ArchiveGroupResult(
-            base_name=base_name,
-            workbook_paths=workbook_paths,
-            matches=matches,
-            extract_dirs=extract_dirs,
-            processing_time=processing_time,
-            total_size=total_size,
+    def _get_average_processing_time_per_file(self) -> float:
+        """Получение среднего времени обработки файла."""
+        # Делегируем обработчику тендеров
+        return self.tender_processor.get_average_processing_time_per_file()
+
+    def run(self, specific_tender_ids: Optional[List[Dict[str, Any]]] = None, 
+            registry_type: Optional[str] = None, tender_type: str = 'new') -> Dict[str, Any]:
+        """
+        Запуск обработки через координатор.
+        
+        Args:
+            specific_tender_ids: Список конкретных тендеров для обработки
+            registry_type: Тип реестра ('44fz' или '223fz')
+            tender_type: Тип торгов ('new' или 'won')
+            
+        Returns:
+            Результаты обработки
+        """
+        # Делегируем всю логику координатору
+        return self.tender_coordinator.process(
+            specific_tender_ids=specific_tender_ids,
+            registry_type=registry_type,
+            tender_type=tender_type,
+            tender_processor=self.tender_processor,
+            tender_provider=self.tender_provider
         )
 
-    @staticmethod
-    def group_matches_by_score(matches: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
-        """Разбивает совпадения на блоки по точности."""
-        groups = {"exact": [], "good": []}
-        for match in matches:
-            score = match.get("score", 0)
-            if score >= 100:
-                groups["exact"].append(match)
-            elif score >= 85:
-                groups["good"].append(match)
-        return groups
-
-    @staticmethod
-    def build_display_chunks(match: Dict[str, Any], download_dir: Path) -> Dict[str, str]:
-        """Формирует части текста для отображения результата."""
-        file_info = ArchiveProcessingService._build_file_info(match, download_dir)
-        summary_line = ArchiveProcessingService._build_summary_line(match)
-        cell_text = ArchiveProcessingService._build_cell_text(match)
-
-        return {
-            "file_info": file_info,
-            "summary": summary_line,
-            "cell_text": cell_text,
-        }
-    
-    @staticmethod
-    def _build_file_info(match: Dict[str, Any], download_dir: Path) -> str:
-        """Формирует информацию о файле"""
-        source_file = Path(match.get("source_file", ""))
-        try:
-            relative_file = source_file.relative_to(download_dir)
-        except ValueError:
-            relative_file = source_file
-        
-        return (
-            f"📄 {relative_file} | 📍 Лист: {match.get('sheet_name')} "
-            f"({match.get('cell_address')})"
+    def process_existing_folders(self, registry_type: Optional[str] = None, 
+                               tender_type: str = 'new') -> int:
+        """Обработка существующих папок с документами."""
+        return self.tender_coordinator.process_existing_folders(
+            registry_type=registry_type,
+            tender_type=tender_type,
+            tender_processor=self.tender_processor
         )
-    
-    @staticmethod
-    def _build_summary_line(match: Dict[str, Any]) -> str:
-        """Формирует строку с суммарной информацией"""
-        row_data = match.get("row_data") or {}
-        field_configs = [
-            ("количество", "📦", "Количество"),
-            ("стоимость_единицы", "💰", "Стоимость единицы"),
-            ("общая_стоимость", "💵", "Общая стоимость"),
-        ]
-        
-        chunks = []
-        for field_key, icon, default_name in field_configs:
-            if field_key in row_data:
-                info = row_data[field_key]
-                chunks.append(
-                    f"{icon} {info.get('name', default_name)} ({info.get('column', '?')}): "
-                    f"{format_number(str(info.get('value')))}"
-                )
-        
-        return " | ".join(chunks) if chunks else ""
-    
-    @staticmethod
-    def _build_cell_text(match: Dict[str, Any]) -> str:
-        """Формирует текст ячейки"""
-        cell_text = match.get("matched_display_text") or match.get("matched_text") or ""
-        cleaned_text = " ".join(str(cell_text).split())
-        if len(cleaned_text) > 200:
-            cleaned_text = f"{cleaned_text[:200]}..."
-        return f"📝 Строка: {cleaned_text}"
 
+    def process_new_tenders(self, registry_type: Optional[str] = None, 
+                          tender_type: str = 'new') -> Dict[str, Any]:
+        """Обработка новых тендеров."""
+        return self.tender_coordinator.process_new_tenders(
+            registry_type=registry_type,
+            tender_type=tender_type,
+            tender_processor=self.tender_processor,
+            tender_provider=self.tender_provider
+        )

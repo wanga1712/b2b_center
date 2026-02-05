@@ -1,4 +1,10 @@
 """
+MODULE: scripts.check_migration_progress_fast
+RESPONSIBILITY: Fast migration progress check using sampling.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv, loguru, time, sys, traceback.
+FORBIDDEN: None.
+ERRORS: None.
+
 Быстрая проверка прогресса миграции (без COUNT на всех записях)
 
 Использует приблизительные подсчеты и выборки для быстрой проверки.

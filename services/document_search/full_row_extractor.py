@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.full_row_extractor
+RESPONSIBILITY: Extract full row data with context from Excel files.
+ALLOWED: openpyxl, xlrd, logging, excel_utils.
+FORBIDDEN: Database access.
+ERRORS: None.
+
 Извлечение полных строк с контекстом из Excel файлов.
 """
 

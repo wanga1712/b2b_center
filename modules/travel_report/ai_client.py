@@ -1,4 +1,12 @@
-"""Клиент для переписывания текста через OpenRouter."""
+"""
+MODULE: modules.travel_report.ai_client
+RESPONSIBILITY: AI client for text rewriting via OpenRouter.
+ALLOWED: json, os, requests, loguru.
+FORBIDDEN: UI interaction.
+ERRORS: None.
+
+Клиент для переписывания текста через OpenRouter.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.bids_document_analyzer
+RESPONSIBILITY: Initiate document analysis for selected tenders.
+ALLOWED: typing, loguru, PyQt5.QtWidgets, modules.bids.document_processor, modules.bids.tender_list_widget.
+FORBIDDEN: Direct document analysis (delegate to DocumentProcessor).
+ERRORS: None.
+
 Модуль для анализа документов в виджете закупок
 
 Содержит методы для запуска анализа документов выбранных или всех тендеров
@@ -82,6 +88,7 @@ class BidsDocumentAnalyzer:
     ):
         """
         Обработка нажатия кнопки 'Анализировать все'
+        Запускает анализ для текущей вкладки
         
         Args:
             tenders_44fz_widget: Виджет новых закупок 44ФЗ
@@ -111,6 +118,30 @@ class BidsDocumentAnalyzer:
         )
         
         if reply == QMessageBox.Yes:
+            # #region agent log ANALYZE_ALL_CONFIRMED
+            import json
+            import time
+            log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "analysis-trigger",
+                        "hypothesisId": "analyze-all",
+                        "location": "bids_document_analyzer.py:handle_analyze_all_tenders",
+                        "message": "ANALYZE_ALL_CONFIRMED",
+                        "data": {
+                            "registry_type": registry_type,
+                            "tender_type": tender_type,
+                            "priority_44fz": len(priority_44fz),
+                            "priority_223fz": len(priority_223fz),
+                            "priority_total": priority_count
+                        },
+                        "timestamp": int(time.time() * 1000)
+                    }, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+            # #endregion
             self._run_document_processing_for_all(
                 priority_44fz, priority_223fz, registry_type=registry_type,
                 tender_type=tender_type, parent_widget=parent_widget

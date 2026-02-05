@@ -1,4 +1,12 @@
-"""Модуль для определения цветов карточек совпадений по score."""
+"""
+MODULE: modules.bids.tender_match_card_colors
+RESPONSIBILITY: Determine colors for match cards based on score.
+ALLOWED: None (pure logic).
+FORBIDDEN: External dependencies.
+ERRORS: None.
+
+Модуль для определения цветов карточек совпадений по score.
+"""
 
 def get_match_card_colors(score: float) -> tuple:
     """

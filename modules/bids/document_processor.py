@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.document_processor
+RESPONSIBILITY: Execute external script for document processing.
+ALLOWED: subprocess, sys, pathlib, typing, loguru, PyQt5.QtWidgets, modules.bids.process_output.
+FORBIDDEN: Direct database writes (use the external script).
+ERRORS: None (handles exceptions).
+
 Модуль для обработки документов тендеров.
 """
 
@@ -166,10 +172,48 @@ class DocumentProcessor:
         priority_count: int = 0
     ) -> None:
         """Запуск процесса обработки документов"""
+        print(f"DEBUG: _run_process called with cmd: {cmd[:3]}...", file=sys.stderr)
+        # #region agent log
+        import json
+        import time
+        log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "A",
+                    "location": "document_processor.py:_run_process:entry",
+                    "message": "Запуск процесса анализа",
+                    "data": {
+                        "has_parent_widget": parent_widget is not None,
+                        "priority_count": priority_count
+                    },
+                    "timestamp": int(time.time() * 1000)
+                }, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
+        
         try:
             process = self._create_process(cmd)
             
             if parent_widget:
+                # #region agent log
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "A",
+                            "location": "document_processor.py:_run_process:before_dialog",
+                            "message": "Создание ProcessOutputDialog без callback",
+                            "data": {"has_refresh_method": hasattr(parent_widget, 'refresh_current_feed')},
+                            "timestamp": int(time.time() * 1000)
+                        }, ensure_ascii=False) + "\n")
+                except Exception:
+                    pass
+                # #endregion
                 dialog = ProcessOutputDialog(parent_widget, dialog_title)
                 dialog.start_process(process)
                 dialog.show()
@@ -187,15 +231,22 @@ class DocumentProcessor:
     
     def _create_process(self, cmd: List[str]):
         """Создание процесса для запуска скрипта"""
-        return subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding='utf-8',
-            errors='replace',
-            bufsize=1,
-            universal_newlines=True,
-            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
-        )
+        print(f"DEBUG: Creating subprocess with cmd: {cmd}", file=sys.stderr)
+        try:
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                bufsize=1,
+                universal_newlines=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+            )
+            print(f"DEBUG: Subprocess created, PID: {process.pid}", file=sys.stderr)
+            return process
+        except Exception as e:
+            print(f"DEBUG: Failed to create subprocess: {e}", file=sys.stderr)
+            raise
 

@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.tender_status_badges
+RESPONSIBILITY: Create status badges for tender cards.
+ALLOWED: PyQt5, loguru, modules.styles.bids_styles.
+FORBIDDEN: Database interaction.
+ERRORS: None.
+
 Модуль для создания значков статуса обработки закупок.
 """
 

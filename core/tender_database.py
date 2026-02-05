@@ -1,4 +1,10 @@
 """
+MODULE: core.tender_database
+RESPONSIBILITY: Specialized database manager for TenderMonitor DB.
+ALLOWED: Connection management, advisory locks, monitoring queries.
+FORBIDDEN: General business logic unrelated to DB operations.
+ERRORS: DatabaseConnectionError, DatabaseQueryError.
+
 Менеджер базы данных tender_monitor
 
 Отдельный модуль для работы с базой данных торгов.
@@ -71,10 +77,17 @@ class TenderDatabaseManager:
             raise DatabaseConnectionError(error_msg) from e
     
     def disconnect(self) -> None:
-        """Закрытие подключения к базе данных"""
-        if self._connection and not self._connection.closed:
-            self._connection.close()
-            logger.info("Подключение к БД tender_monitor закрыто")
+        """Закрытие подключения к базе данных с защитой от Access Violation"""
+        try:
+            if self._connection and not self._connection.closed:
+                try:
+                    self._connection.close()
+                    logger.info("Подключение к БД tender_monitor закрыто")
+                except Exception as close_error:
+                    logger.warning(f"Ошибка при закрытии подключения к БД tender_monitor: {close_error}")
+        except Exception as e:
+            logger.warning(f"Ошибка при проверке состояния подключения tender_monitor: {e}")
+        finally:
             self._connection = None
     
     def execute_query(
@@ -83,6 +96,30 @@ class TenderDatabaseManager:
         params: Optional[Tuple] = None,
         cursor_factory=None
     ) -> List[Dict[str, Any]]:
+        # #region agent log
+        import json
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        log_path = os.path.join(project_root, ".cursor", "debug.log")
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "transaction-debug",
+                    "hypothesisId": "TRANSACTION_A",
+                    "location": "tender_database.py:execute_query:entry",
+                    "message": "Начинаем execute_query",
+                    "data": {
+                        "query_start": query[:100] + "..." if len(query) > 100 else query,
+                        "has_params": params is not None,
+                        "params_count": len(params) if params else 0,
+                        "autocommit": getattr(self._connection, 'autocommit', 'unknown') if self._connection else None
+                    },
+                    "timestamp": int(__import__('time').time() * 1000)
+                }) + "\n")
+        except Exception:
+            pass  # Игнорируем ошибки логирования
+        # #endregion
         """
         Выполнение SELECT запроса
         
@@ -108,24 +145,73 @@ class TenderDatabaseManager:
             with self._connection.cursor(cursor_factory=cursor_factory) as cursor:
                 cursor.execute(query, params)
                 
-                # Проверяем, есть ли RETURNING в запросе (для INSERT/UPDATE/DELETE с возвратом данных)
-                query_upper = query.strip().upper()
-                has_returning = 'RETURNING' in query_upper
+                # Проверяем, есть ли результаты для выборки (через description)
+                # Если description не None, значит есть результаты
+                has_results = cursor.description is not None
                 
-                if query_upper.startswith('SELECT') or has_returning:
+                if has_results:
                     result = cursor.fetchall()
+                    # Проверяем, есть ли RETURNING в запросе (для INSERT/UPDATE/DELETE с возвратом данных)
+                    query_upper = query.strip().upper()
+                    has_returning = 'RETURNING' in query_upper
                     if has_returning:
                         self._connection.commit()
+                        # #region agent log
+                        try:
+                            with open(log_path, "a", encoding="utf-8") as f:
+                                f.write(json.dumps({
+                                    "sessionId": "debug-session",
+                                    "runId": "transaction-debug",
+                                    "hypothesisId": "TRANSACTION_A",
+                                    "location": "tender_database.py:execute_query:commit_select",
+                                    "message": "COMMIT после SELECT с RETURNING",
+                                    "data": {"result_count": len(result), "query_type": "SELECT_RETURNING"},
+                                    "timestamp": int(__import__('time').time() * 1000)
+                                }) + "\n")
+                        except Exception:
+                            pass
+                        # #endregion
                         logger.debug(f"Выполнен запрос с RETURNING к tender_monitor, возвращено {len(result)} строк")
                     else:
                         logger.debug(f"Выполнен SELECT запрос к tender_monitor, возвращено {len(result)} строк")
                     return result
                 else:
+                    # Нет результатов (DDL команды, обычные INSERT/UPDATE/DELETE без RETURNING)
                     self._connection.commit()
-                    logger.debug(f"Выполнен запрос к tender_monitor: {query[:50]}...")
+                    # #region agent log
+                    try:
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({
+                                "sessionId": "debug-session",
+                                "runId": "transaction-debug",
+                                "hypothesisId": "TRANSACTION_A",
+                                "location": "tender_database.py:execute_query:commit_other",
+                                "message": "COMMIT после OTHER",
+                                "data": {"query_type": "OTHER", "query_start": query[:50]},
+                                "timestamp": int(__import__('time').time() * 1000)
+                            }) + "\n")
+                    except Exception:
+                        pass
+                    # #endregion
+                    logger.debug(f"Выполнен запрос к tender_monitor (без результатов): {query[:50]}...")
                     return []
         except psycopg2.Error as e:
             self._connection.rollback()
+            # #region agent log
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "transaction-debug",
+                        "hypothesisId": "TRANSACTION_B",
+                        "location": "tender_database.py:execute_query:rollback_error",
+                        "message": "ROLLBACK из-за ошибки",
+                        "data": {"error_type": type(e).__name__, "error_msg": str(e)[:200]},
+                        "timestamp": int(__import__('time').time() * 1000)
+                    }) + "\n")
+            except Exception:
+                pass
+            # #endregion
             error_msg = f"Ошибка выполнения запроса к БД tender_monitor: {e}"
             logger.error(error_msg)
             raise DatabaseQueryError(error_msg) from e
@@ -135,6 +221,29 @@ class TenderDatabaseManager:
         query: str,
         params: Optional[Tuple] = None
     ) -> int:
+        # #region agent log
+        import json
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        log_path = os.path.join(project_root, ".cursor", "debug.log")
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "transaction-debug",
+                    "hypothesisId": "TRANSACTION_C",
+                    "location": "tender_database.py:execute_update:entry",
+                    "message": "Начинаем execute_update",
+                    "data": {
+                        "query_start": query[:100] + "..." if len(query) > 100 else query,
+                        "has_params": params is not None,
+                        "params_count": len(params) if params else 0
+                    },
+                    "timestamp": int(__import__('time').time() * 1000)
+                }) + "\n")
+        except Exception:
+            pass
+        # #endregion
         """
         Выполнение INSERT/UPDATE/DELETE запроса
         
@@ -156,10 +265,40 @@ class TenderDatabaseManager:
                 cursor.execute(query, params)
                 affected_rows = cursor.rowcount
                 self._connection.commit()
+                # #region agent log
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({
+                            "sessionId": "debug-session",
+                            "runId": "transaction-debug",
+                            "hypothesisId": "TRANSACTION_C",
+                            "location": "tender_database.py:execute_update:commit",
+                            "message": "COMMIT после UPDATE",
+                            "data": {"affected_rows": affected_rows, "query_start": query[:50]},
+                            "timestamp": int(__import__('time').time() * 1000)
+                        }) + "\n")
+                except Exception:
+                    pass
+                # #endregion
                 logger.debug(f"Выполнен UPDATE запрос, затронуто строк: {affected_rows}")
                 return affected_rows
         except psycopg2.Error as e:
             self._connection.rollback()
+            # #region agent log
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "transaction-debug",
+                        "hypothesisId": "TRANSACTION_D",
+                        "location": "tender_database.py:execute_update:rollback_error",
+                        "message": "ROLLBACK UPDATE из-за ошибки",
+                        "data": {"error_type": type(e).__name__, "error_msg": str(e)[:200]},
+                        "timestamp": int(__import__('time').time() * 1000)
+                    }) + "\n")
+            except Exception:
+                pass
+            # #endregion
             error_msg = f"Ошибка выполнения UPDATE запроса к БД tender_monitor: {e}"
             logger.error(error_msg)
             raise DatabaseQueryError(error_msg) from e

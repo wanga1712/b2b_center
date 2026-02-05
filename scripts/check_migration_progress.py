@@ -1,4 +1,10 @@
 """
+MODULE: scripts.check_migration_progress
+RESPONSIBILITY: Monitoring progress of the active migration.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv, loguru, time, sys.
+FORBIDDEN: None.
+ERRORS: None.
+
 Скрипт для проверки прогресса миграции статусов
 
 Запустите в отдельном терминале, пока основная миграция выполняется.

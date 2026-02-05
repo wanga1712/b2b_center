@@ -1,4 +1,12 @@
-"""Убить зависшие запросы (ОСТОРОЖНО!)"""
+"""
+MODULE: scripts.kill_hanging_queries
+RESPONSIBILITY: Terminating hanging database queries.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv.
+FORBIDDEN: None.
+ERRORS: None.
+
+Убить зависшие запросы (ОСТОРОЖНО!)
+"""
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os

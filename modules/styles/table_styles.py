@@ -1,4 +1,10 @@
 """
+MODULE: modules.styles.table_styles
+RESPONSIBILITY: Table widget styles.
+ALLOWED: modules.styles.general_styles.
+FORBIDDEN: Business logic.
+ERRORS: None.
+
 Стили для таблиц и элементов внутри таблиц
 
 Содержит стили для:

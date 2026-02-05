@@ -1,9 +1,17 @@
-"""Модуль с методами получения данных для карточки закупки."""
+"""
+MODULE: modules.bids.tender_card_fetch
+RESPONSIBILITY: Helper functions for fetching tender card data.
+ALLOWED: typing, services.tender_match_repository.
+FORBIDDEN: UI code.
+ERRORS: None.
+
+Модуль с методами получения данных для карточки закупки.
+"""
 
 from typing import Any, Dict, List, Optional, TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
-    from services.tender_match_repository import TenderMatchRepository
+    from services.match_services.tender_match_repository_facade import TenderMatchRepositoryFacade as TenderMatchRepository
 
 
 def create_fetch_match_summary(

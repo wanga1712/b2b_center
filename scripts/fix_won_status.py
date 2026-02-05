@@ -1,4 +1,12 @@
-"""Исправление записей со статусом 'Разыграна', которые не соответствуют условию"""
+"""
+MODULE: scripts.fix_won_status
+RESPONSIBILITY: Fixing records with 'Won' status that do not meet the criteria.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv.
+FORBIDDEN: None.
+ERRORS: None.
+
+Исправление записей со статусом 'Разыграна', которые не соответствуют условию
+"""
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os

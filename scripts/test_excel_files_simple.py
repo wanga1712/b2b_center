@@ -1,5 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Простой скрипт для тестирования Excel файлов."""
+"""
+MODULE: scripts.test_excel_files_simple
+RESPONSIBILITY: Simple testing of Excel files.
+ALLOWED: sys, pathlib, services.document_search.excel_parser, services.document_search.file_format_detector, traceback.
+FORBIDDEN: None.
+ERRORS: None.
+
+Простой скрипт для тестирования Excel файлов.
+"""
 
 import sys
 from pathlib import Path

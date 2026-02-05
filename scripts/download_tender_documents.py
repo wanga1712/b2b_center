@@ -1,4 +1,10 @@
 """
+MODULE: scripts.download_tender_documents
+RESPONSIBILITY: Downloading all documents for a tender specified by contract number.
+ALLOWED: sys, pathlib, typing, loguru, psycopg2.extras, config.settings, core.database, core.tender_database, core.exceptions, services.document_search_service, services.document_search.document_downloader.
+FORBIDDEN: None.
+ERRORS: None.
+
 Скрипт для скачивания всех документов по номеру закупки из базы данных.
 """
 

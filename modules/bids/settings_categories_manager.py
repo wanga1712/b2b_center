@@ -1,4 +1,16 @@
 """
+MODULE: modules.bids.settings_categories_manager
+RESPONSIBILITY: Manage OKPD categories in the settings UI.
+ALLOWED: PyQt5.QtWidgets, PyQt5.QtCore, loguru, services.tender_repository.
+FORBIDDEN: Direct SQL queries (use TenderRepository).
+ERRORS: None.
+
+MODULE: modules.bids.settings_categories_manager
+RESPONSIBILITY: Manage OKPD categories in the settings UI.
+ALLOWED: PyQt5.QtWidgets, PyQt5.QtCore, loguru, services.tender_repository.
+FORBIDDEN: Direct SQL queries (use TenderRepository).
+ERRORS: None.
+
 Модуль для управления категориями ОКПД в настройках.
 """
 
@@ -6,13 +18,13 @@ from PyQt5.QtWidgets import QMessageBox, QComboBox, QListWidget
 from PyQt5.QtCore import Qt
 from loguru import logger
 
-from services.tender_repository import TenderRepository
+from services.tender_services.tender_repository_facade import TenderRepositoryFacade
 
 
 class CategoriesManager:
     """Класс для управления категориями ОКПД"""
     
-    def __init__(self, tender_repo: TenderRepository, user_id: int):
+    def __init__(self, tender_repo: TenderRepositoryFacade, user_id: int):
         """
         Инициализация менеджера категорий
         

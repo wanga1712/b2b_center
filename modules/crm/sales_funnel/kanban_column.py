@@ -1,4 +1,10 @@
 """
+MODULE: modules.crm.sales_funnel.kanban_column
+RESPONSIBILITY: Kanban column UI widget displaying deal cards.
+ALLOWED: PyQt5, loguru, modules.styles.*, modules.crm.sales_funnel.deal_card, modules.crm.sales_funnel.models.
+FORBIDDEN: Heavy business logic.
+ERRORS: None.
+
 Колонка канбан-доски для воронок продаж
 """
 

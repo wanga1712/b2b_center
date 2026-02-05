@@ -1,4 +1,10 @@
 """
+MODULE: services.tender_repositories.okpd_category_repository
+RESPONSIBILITY: Manage OKPD categories in DB.
+ALLOWED: typing, loguru, core.tender_database, psycopg2.extras.
+FORBIDDEN: Business logic outside DB operations.
+ERRORS: Database exceptions.
+
 Репозиторий для работы с категориями ОКПД.
 """
 

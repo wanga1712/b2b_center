@@ -1,4 +1,10 @@
 """
+MODULE: services.helpers.archive_cleanup
+RESPONSIBILITY: Cleanup of temporary archives and extracted files.
+ALLOWED: pathlib, shutil, loguru.
+FORBIDDEN: Deleting non-temporary files.
+ERRORS: None.
+
 Вспомогательные функции для очистки архивов и временных директорий.
 """
 

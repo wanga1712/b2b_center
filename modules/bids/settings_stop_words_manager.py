@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.settings_stop_words_manager
+RESPONSIBILITY: Manage user stop words in the settings UI.
+ALLOWED: re, PyQt5.QtWidgets, loguru, services.tender_repository.
+FORBIDDEN: Direct SQL queries (use TenderRepository).
+ERRORS: None.
+
 Модуль для управления стоп-словами в настройках.
 """
 
@@ -6,13 +12,13 @@ import re
 from PyQt5.QtWidgets import QMessageBox
 from loguru import logger
 
-from services.tender_repository import TenderRepository
+from services.tender_services.tender_repository_facade import TenderRepositoryFacade
 
 
 class StopWordsManager:
     """Класс для управления стоп-словами"""
     
-    def __init__(self, tender_repo: TenderRepository, user_id: int):
+    def __init__(self, tender_repo: TenderRepositoryFacade, user_id: int):
         """
         Инициализация менеджера стоп-слов
         

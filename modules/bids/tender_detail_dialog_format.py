@@ -1,4 +1,12 @@
-"""Модуль для форматирования данных в диалоге деталей закупки."""
+"""
+MODULE: modules.bids.tender_detail_dialog_format
+RESPONSIBILITY: Format data (price, date) for detail dialog.
+ALLOWED: datetime, typing.
+FORBIDDEN: External dependencies (pure logic).
+ERRORS: None.
+
+Модуль для форматирования данных в диалоге деталей закупки.
+"""
 
 from datetime import datetime
 from typing import Any, Optional

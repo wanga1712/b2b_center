@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.archive_extractor
+RESPONSIBILITY: Extract archive files (zip, rar, 7z) into a directory.
+ALLOWED: py7zr, rarfile, zipfile, shutil, subprocess, logging, services.document_search.document_selector.
+FORBIDDEN: Network access, database access.
+ERRORS: DocumentSearchError.
+
 Модуль для извлечения архивов.
 
 Класс ArchiveExtractor отвечает за:
@@ -158,17 +164,27 @@ class ArchiveExtractor:
             unrar_executable,
             "x",
             "-y",
+            "-inul",  # Подавляем вывод UnRAR в консоль
             archive_path.name,
             str(extract_dir),
         ]
 
         logger.debug(f"Запускаю распаковку: {' '.join(command)} (cwd={archive_path.parent})")
+        
+        # Используем правильную кодировку для Windows (cp866 для консоли, cp1251 для GUI)
+        import sys
+        if sys.platform == 'win32':
+            # Пробуем cp866 (консоль Windows) или cp1251 (GUI Windows)
+            encoding = 'cp866'
+        else:
+            encoding = 'utf-8'
+        
         result = subprocess.run(
             command,
             cwd=str(archive_path.parent),
             capture_output=True,
             text=True,
-            encoding='utf-8',
+            encoding=encoding,
             errors='replace',  # Заменяем некорректные символы вместо ошибки
         )
 

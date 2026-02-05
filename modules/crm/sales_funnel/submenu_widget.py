@@ -1,4 +1,10 @@
 """
+MODULE: modules.crm.sales_funnel.submenu_widget
+RESPONSIBILITY: Submenu widget for Sales Funnel section.
+ALLOWED: PyQt5, pathlib, loguru, modules.styles.*, modules.crm.folder_card, modules.crm.sales_funnel.models.
+FORBIDDEN: Business logic.
+ERRORS: None.
+
 Виджет подменю для раздела Воронка продаж
 """
 

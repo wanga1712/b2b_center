@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.document_downloader_coordinator
+RESPONSIBILITY: Coordinate high-level document downloading logic (retries, progress).
+ALLOWED: DocumentDownloader, ThreadPoolExecutor, logging.
+FORBIDDEN: Direct HTTP requests (use DocumentDownloader).
+ERRORS: DocumentSearchError.
+
 Модуль для координации скачивания документов.
 """
 

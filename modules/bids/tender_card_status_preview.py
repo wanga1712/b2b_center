@@ -1,4 +1,12 @@
-"""Модуль для создания статуса и превью совпадений в карточке закупки."""
+"""
+MODULE: modules.bids.tender_card_status_preview
+RESPONSIBILITY: Preview widget for tender card status matches.
+ALLOWED: PyQt5, typing, modules.bids.tender_matches_preview.
+FORBIDDEN: Database interaction.
+ERRORS: None.
+
+Модуль для создания статуса и превью совпадений в карточке закупки.
+"""
 
 from PyQt5.QtWidgets import QHBoxLayout
 

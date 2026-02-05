@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.tender_matches_preview
+RESPONSIBILITY: Preview widget for tender matches summary.
+ALLOWED: PyQt5, modules.styles.general_styles.
+FORBIDDEN: Business logic.
+ERRORS: None.
+
 Модуль для создания превью совпадений в карточке закупки.
 """
 

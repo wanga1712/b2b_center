@@ -1,4 +1,12 @@
-"""Вспомогательные функции для работы с файлами отчетов по командировкам."""
+"""
+MODULE: modules.travel_report.io_utils
+RESPONSIBILITY: File I/O utilities for travel report.
+ALLOWED: typing, datetime, pathlib, shutil, modules.travel_report.logic.
+FORBIDDEN: UI interaction.
+ERRORS: None.
+
+Вспомогательные функции для работы с файлами отчетов по командировкам.
+"""
 
 from __future__ import annotations
 

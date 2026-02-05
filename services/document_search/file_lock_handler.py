@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.file_lock_handler
+RESPONSIBILITY: Handle file locking issues (kill holding processes).
+ALLOWED: psutil, logging, time.
+FORBIDDEN: Modification of file content.
+ERRORS: None.
+
 Модуль для обработки блокировок файлов.
 
 Если файл заблокирован другим процессом, пытается найти и завершить процесс,
@@ -45,10 +51,33 @@ def try_kill_process_holding_file(file_path: Path) -> bool:
         # Список процессов, которые могут держать файл
         processes_to_kill = []
         
-        for proc in psutil.process_iter():
+        # Используем более безопасный способ итерации по процессам
+        # с защитой от Access Violation
+        try:
+            process_list = list(psutil.process_iter(['pid', 'name']))
+        except Exception as e:
+            logger.warning(f"Не удалось получить список процессов: {e}")
+            return False
+        
+        for proc_info in process_list:
             try:
-                # Получаем открытые файлы процесса
-                open_files = proc.open_files()
+                # Получаем процесс по PID для безопасности
+                proc = psutil.Process(proc_info.info['pid'])
+                
+                # Проверяем, что процесс еще существует
+                if not proc.is_running():
+                    continue
+                
+                # Получаем открытые файлы процесса с защитой
+                try:
+                    open_files = proc.open_files()
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    continue
+                except Exception as e:
+                    # Игнорируем ошибки доступа к процессу
+                    logger.debug(f"Ошибка при получении открытых файлов процесса PID={proc_info.info['pid']}: {e}")
+                    continue
+                
                 for file_info in open_files:
                     try:
                         file_path_to_check = str(Path(file_info.path).resolve()).lower()
@@ -59,42 +88,61 @@ def try_kill_process_holding_file(file_path: Path) -> bool:
                                 f"PID={proc.pid}, Name={proc.name()}"
                             )
                             break  # Найден процесс, переходим к следующему
-                    except (OSError, ValueError):
+                    except (OSError, ValueError, AttributeError):
                         # Не удалось разрешить путь, пропускаем
                         continue
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 # Процесс уже завершился или нет доступа
                 continue
             except Exception as error:
-                logger.debug(f"Ошибка при проверке процесса PID={proc.pid}: {error}")
+                # Защита от любых других ошибок, включая Access Violation
+                logger.debug(f"Ошибка при проверке процесса: {error}")
                 continue
         
         if not processes_to_kill:
             logger.debug(f"Не найдено процессов, держащих файл {file_path.name}")
             return False
         
-        # Завершаем найденные процессы
+        # Завершаем найденные процессы с защитой от Access Violation
         killed_count = 0
         for proc in processes_to_kill:
             try:
-                logger.info(f"🔪 Завершаем процесс PID={proc.pid} ({proc.name()})")
-                proc.terminate()  # Сначала мягкое завершение
+                # Проверяем, что процесс еще существует
+                if not proc.is_running():
+                    killed_count += 1
+                    continue
+                
+                proc_pid = proc.pid
                 try:
-                    proc.wait(timeout=3)  # Ждем до 3 секунд
-                except psutil.TimeoutExpired:
-                    # Если не завершился - принудительно
-                    logger.warning(f"Процесс {proc.pid} не завершился, принудительное завершение")
-                    proc.kill()
-                    proc.wait(timeout=1)
-                killed_count += 1
-                logger.info(f"✅ Процесс PID={proc.pid} успешно завершен")
-            except psutil.NoSuchProcess:
-                # Процесс уже завершился
-                killed_count += 1
-            except psutil.AccessDenied:
-                logger.warning(f"Нет доступа для завершения процесса PID={proc.pid}")
+                    proc_name = proc.name()
+                except Exception:
+                    proc_name = "unknown"
+                
+                logger.info(f"🔪 Завершаем процесс PID={proc_pid} ({proc_name})")
+                
+                try:
+                    proc.terminate()  # Сначала мягкое завершение
+                    try:
+                        proc.wait(timeout=3)  # Ждем до 3 секунд
+                    except psutil.TimeoutExpired:
+                        # Если не завершился - принудительно
+                        logger.warning(f"Процесс {proc_pid} не завершился, принудительное завершение")
+                        try:
+                            proc.kill()
+                            proc.wait(timeout=1)
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            # Процесс уже завершился или нет доступа
+                            pass
+                    killed_count += 1
+                    logger.info(f"✅ Процесс PID={proc_pid} успешно завершен")
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    # Процесс уже завершился или нет доступа
+                    killed_count += 1
             except Exception as error:
-                logger.warning(f"Ошибка при завершении процесса PID={proc.pid}: {error}")
+                # Защита от любых ошибок, включая Access Violation
+                logger.warning(f"Ошибка при завершении процесса: {error}")
+                # Продолжаем обработку следующих процессов
+                continue
         
         if killed_count > 0:
             # Даем время процессу освободить файл

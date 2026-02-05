@@ -1,4 +1,10 @@
 """
+MODULE: services.tender_repositories.tender_query_builder
+RESPONSIBILITY: Build SQL queries for tender search/filtering.
+ALLOWED: typing, datetime, loguru, json, time.
+FORBIDDEN: Executing queries (only building).
+ERRORS: ValueError.
+
 Билдер для построения оптимизированных SQL запросов для тендеров.
 """
 
@@ -132,16 +138,17 @@ class TenderQueryBuilder:
     def build_won_tenders_filter(today: date, use_status: bool = True) -> tuple[str, List[Any]]:
         """
         Фильтр для разыгранных тендеров.
-        
-        Если use_status=True (после миграции): использует статус (status_id = 3)
+
+        Если use_status=True: использует статус (status_id IN (2, 3) - разыгранные торги)
         Если use_status=False (до миграции): использует даты
-        
-        Статус:
-        - 3 = Разыграна (delivery_end_date >= CURRENT_DATE + 90 дней)
+
+        Статусы:
+        - 2 = Разыграна (основной статус разыгранных торгов)
+        - 3 = Разыграна (дополнительный статус)
         """
         if use_status:
-            # Используем статус - намного быстрее благодаря индексу
-            return " AND r.status_id = 3", []
+            # Используем статусы разыгранных торгов - намного быстрее благодаря индексу
+            return " AND r.status_id IN (2, 3)", []
         else:
             # Старый способ через даты (для обратной совместимости)
             min_delivery_date = today + timedelta(days=90)
@@ -174,6 +181,27 @@ class TenderQueryBuilder:
         if not user_stop_words:
             logger.debug("Стоп-слова не переданы в build_stop_words_filter")
             return "", []
+        # #region agent log STOP_WORDS_STATS
+        import json
+        import time
+        log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
+        started_at = time.time()
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "perf-startup",
+                    "hypothesisId": "stop-words-slow",
+                    "location": "tender_query_builder.py:build_stop_words_filter",
+                    "message": "STOP_WORDS_START",
+                    "data": {
+                        "stop_words_count": len(user_stop_words),
+                    },
+                    "timestamp": int(started_at * 1000),
+                }, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
         conditions = []
         params = []
         for stop_word in user_stop_words:
@@ -182,6 +210,25 @@ class TenderQueryBuilder:
                 params.append(f"%{stop_word.lower().strip()}%")
         if conditions:
             logger.debug(f"Применяется фильтр по стоп-словам: {len(conditions)} условий")
+            # #region agent log STOP_WORDS_DONE
+            finished_at = time.time()
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "perf-startup",
+                        "hypothesisId": "stop-words-slow",
+                        "location": "tender_query_builder.py:build_stop_words_filter",
+                        "message": "STOP_WORDS_DONE",
+                        "data": {
+                            "conditions": len(conditions),
+                            "duration_ms": int((finished_at - started_at) * 1000),
+                        },
+                        "timestamp": int(finished_at * 1000),
+                    }, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+            # #endregion
             return f" AND {' AND '.join(conditions)}", params
         else:
             logger.warning(f"Все стоп-слова пустые или невалидные: {user_stop_words}")

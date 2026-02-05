@@ -1,4 +1,12 @@
-"""Проверка на каком этапе остановилась миграция"""
+"""
+MODULE: scripts.check_migration_stage
+RESPONSIBILITY: Checking the current stage of the migration process.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv.
+FORBIDDEN: None.
+ERRORS: None.
+
+Проверка на каком этапе остановилась миграция
+"""
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os

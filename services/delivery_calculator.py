@@ -1,3 +1,11 @@
+"""
+MODULE: services.delivery_calculator
+RESPONSIBILITY: Calculate delivery costs based on distance and vehicle type.
+ALLOWED: math, dataclasses, config.settings.
+FORBIDDEN: Database access, external API calls.
+ERRORS: None.
+"""
+
 from dataclasses import dataclass
 from typing import Dict
 import math

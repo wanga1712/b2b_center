@@ -1,4 +1,10 @@
 """
+MODULE: modules.crm.sales_funnel.deal_repository
+RESPONSIBILITY: Repository for Deal persistence and CRUD operations.
+ALLOWED: typing, datetime, loguru, core.tender_database, psycopg2, json, modules.crm.sales_funnel.models.
+FORBIDDEN: UI interaction.
+ERRORS: None.
+
 Репозиторий для работы со сделками в воронках продаж
 """
 
@@ -18,26 +24,39 @@ class DealRepository:
         self.db_manager = db_manager
     
     @staticmethod
-    def _json_serializer(obj: Any) -> str:
-        """Сериализатор для JSON, обрабатывающий даты и datetime"""
+    def _json_serializer(obj: Any) -> Any:
+        """Сериализатор для JSON, обрабатывающий даты, datetime и Decimal"""
         if isinstance(obj, (date, datetime)):
             return obj.isoformat()
+        # Обработка Decimal из PostgreSQL
+        from decimal import Decimal
+        if isinstance(obj, Decimal):
+            return float(obj)
+        # Обработка других типов, которые могут быть в данных из БД
+        if hasattr(obj, 'isoformat'):  # Для datetime/date объектов
+            return obj.isoformat()
+        if hasattr(obj, '__dict__'):  # Для объектов, которые можно преобразовать в dict
+            return str(obj)
         raise TypeError(f"Type {type(obj)} not serializable")
     
     @staticmethod
     def _parse_metadata(metadata_value: Any) -> Optional[Dict[str, Any]]:
         """Парсинг metadata из БД (может быть строкой JSON или уже словарем)"""
+        
         if not metadata_value:
             return None
         if isinstance(metadata_value, dict):
-            return metadata_value
-        if isinstance(metadata_value, str):
+            parsed = metadata_value
+        elif isinstance(metadata_value, str):
             try:
-                return json.loads(metadata_value)
+                parsed = json.loads(metadata_value)
             except (json.JSONDecodeError, TypeError):
                 logger.warning(f"Не удалось распарсить metadata как JSON: {metadata_value}")
                 return None
-        return None
+        else:
+            return None
+        
+        return parsed
     
     def create_deal(self, deal: Deal) -> Optional[int]:
         """Создание новой сделки"""
@@ -96,13 +115,43 @@ class DealRepository:
             metadata_json = None
             if deal.metadata:
                 try:
+                    # Сначала пытаемся сериализовать весь metadata
                     metadata_json = json.dumps(deal.metadata, default=self._json_serializer)
                 except Exception as e:
-                    logger.warning(f"Ошибка при сериализации metadata, сохраняем без original_data: {e}")
-                    # Сохраняем metadata без original_data если есть проблемы с сериализацией
-                    safe_metadata = {k: v for k, v in deal.metadata.items() if k != 'original_data'}
-                    if safe_metadata:
+                    # Если не получилось, пытаемся обработать original_data отдельно
+                    logger.warning(f"Ошибка при сериализации metadata в create_deal: {e}, пытаемся обработать original_data отдельно")
+                    try:
+                        # Копируем metadata и обрабатываем original_data рекурсивно
+                        safe_metadata = {}
+                        for k, v in deal.metadata.items():
+                            if k == 'original_data' and isinstance(v, dict):
+                                # Обрабатываем original_data отдельно, конвертируя все date/datetime
+                                processed_original = {}
+                                for orig_k, orig_v in v.items():
+                                    try:
+                                        from decimal import Decimal
+                                        if isinstance(orig_v, (date, datetime)):
+                                            processed_original[orig_k] = orig_v.isoformat()
+                                        elif isinstance(orig_v, Decimal):
+                                            processed_original[orig_k] = float(orig_v)
+                                        elif orig_v is None:
+                                            processed_original[orig_k] = None
+                                        else:
+                                            processed_original[orig_k] = orig_v
+                                    except Exception as orig_e:
+                                        logger.warning(f"Ошибка при обработке поля {orig_k} в original_data: {orig_e}, пропускаем")
+                                        processed_original[orig_k] = str(orig_v) if orig_v else None
+                                safe_metadata[k] = processed_original
+                            else:
+                                safe_metadata[k] = v
                         metadata_json = json.dumps(safe_metadata, default=self._json_serializer)
+                        logger.info(f"Metadata успешно сериализовано с обработанным original_data в create_deal")
+                    except Exception as e2:
+                        logger.error(f"Критическая ошибка при сериализации metadata даже без original_data в create_deal: {e2}")
+                        # В крайнем случае сохраняем без original_data
+                        safe_metadata = {k: v for k, v in deal.metadata.items() if k != 'original_data'}
+                        if safe_metadata:
+                            metadata_json = json.dumps(safe_metadata, default=self._json_serializer)
             
             logger.debug(f"Создание сделки: pipeline_type={deal.pipeline_type.value}, stage_id={deal.stage_id}, tender_id={deal.tender_id}")
             result = self.db_manager.execute_query(
@@ -224,14 +273,110 @@ class DealRepository:
             # Сериализуем metadata с обработкой дат
             metadata_json = None
             if deal.metadata:
+                # #region agent log
+                import time
+                log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
                 try:
+                    has_orig = "original_data" in deal.metadata
+                    orig_keys = list(deal.metadata.get("original_data", {}).keys())[:10] if deal.metadata.get("original_data") else []
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({
+                            "sessionId": "debug-session",
+                            "runId": "save",
+                            "hypothesisId": "SAVE1",
+                            "location": "deal_repository.py:update_deal:before_serialize",
+                            "message": "Before serializing metadata",
+                            "data": {
+                                "deal_id": deal.id,
+                                "metadata_has_original_data": has_orig,
+                                "original_data_keys": orig_keys,
+                            },
+                            "timestamp": int(time.time() * 1000)
+                        }, ensure_ascii=False) + "\n")
+                except Exception:
+                    pass
+                # #endregion
+                
+                try:
+                    # Сначала пытаемся сериализовать весь metadata
                     metadata_json = json.dumps(deal.metadata, default=self._json_serializer)
+                    
+                    # #region agent log
+                    try:
+                        parsed_back = json.loads(metadata_json)
+                        has_orig_after = "original_data" in parsed_back if parsed_back else False
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({
+                                "sessionId": "debug-session",
+                                "runId": "save",
+                                "hypothesisId": "SAVE2",
+                                "location": "deal_repository.py:update_deal:after_serialize_success",
+                                "message": "After successful serialization",
+                                "data": {
+                                    "deal_id": deal.id,
+                                    "serialization_success": True,
+                                    "metadata_json_length": len(metadata_json),
+                                    "parsed_back_has_original_data": has_orig_after,
+                                },
+                                "timestamp": int(time.time() * 1000)
+                            }, ensure_ascii=False) + "\n")
+                    except Exception:
+                        pass
+                    # #endregion
                 except Exception as e:
-                    logger.warning(f"Ошибка при сериализации metadata, сохраняем без original_data: {e}")
-                    # Сохраняем metadata без original_data если есть проблемы с сериализацией
-                    safe_metadata = {k: v for k, v in deal.metadata.items() if k != 'original_data'}
-                    if safe_metadata:
+                    # Если не получилось, пытаемся обработать original_data отдельно
+                    logger.warning(f"Ошибка при сериализации metadata в update_deal: {e}, пытаемся обработать original_data отдельно")
+                    
+                    # #region agent log
+                    try:
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({
+                                "sessionId": "debug-session",
+                                "runId": "save",
+                                "hypothesisId": "SAVE3",
+                                "location": "deal_repository.py:update_deal:serialization_error",
+                                "message": "Serialization error",
+                                "data": {
+                                    "deal_id": deal.id,
+                                    "error": str(e),
+                                },
+                                "timestamp": int(time.time() * 1000)
+                            }, ensure_ascii=False) + "\n")
+                    except Exception:
+                        pass
+                    # #endregion
+                    try:
+                        # Копируем metadata и обрабатываем original_data рекурсивно
+                        safe_metadata = {}
+                        for k, v in deal.metadata.items():
+                            if k == 'original_data' and isinstance(v, dict):
+                                # Обрабатываем original_data отдельно, конвертируя все date/datetime
+                                processed_original = {}
+                                for orig_k, orig_v in v.items():
+                                    try:
+                                        from decimal import Decimal
+                                        if isinstance(orig_v, (date, datetime)):
+                                            processed_original[orig_k] = orig_v.isoformat()
+                                        elif isinstance(orig_v, Decimal):
+                                            processed_original[orig_k] = float(orig_v)
+                                        elif orig_v is None:
+                                            processed_original[orig_k] = None
+                                        else:
+                                            processed_original[orig_k] = orig_v
+                                    except Exception as orig_e:
+                                        logger.warning(f"Ошибка при обработке поля {orig_k} в original_data: {orig_e}, пропускаем")
+                                        processed_original[orig_k] = str(orig_v) if orig_v else None
+                                safe_metadata[k] = processed_original
+                            else:
+                                safe_metadata[k] = v
                         metadata_json = json.dumps(safe_metadata, default=self._json_serializer)
+                        logger.info(f"Metadata успешно сериализовано с обработанным original_data в update_deal")
+                    except Exception as e2:
+                        logger.error(f"Критическая ошибка при сериализации metadata даже без original_data в update_deal: {e2}")
+                        # В крайнем случае сохраняем без original_data
+                        safe_metadata = {k: v for k, v in deal.metadata.items() if k != 'original_data'}
+                        if safe_metadata:
+                            metadata_json = json.dumps(safe_metadata, default=self._json_serializer)
             self.db_manager.execute_update(
                 query,
                 (

@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search_service
+RESPONSIBILITY: Coordinate document search operations (download, extract, match).
+ALLOWED: DatabaseManager, DocumentDownloader, ArchiveExtractor, MatchFinder.
+FORBIDDEN: Direct DB queries (use managers), UI logic.
+ERRORS: DocumentSearchError.
+
 Сервис для скачивания документации торгов и поиска товаров внутри Excel-файлов.
 
 Рефакторенная версия с разделением на модули.

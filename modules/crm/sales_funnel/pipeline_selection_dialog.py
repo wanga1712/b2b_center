@@ -1,4 +1,10 @@
 """
+MODULE: modules.crm.sales_funnel.pipeline_selection_dialog
+RESPONSIBILITY: UI Dialog for selecting sales pipeline target.
+ALLOWED: PyQt5, modules.styles, modules.crm.sales_funnel.models.
+FORBIDDEN: Complex business logic (UI selection only).
+ERRORS: None.
+
 Диалог выбора воронки продаж для перемещения закупки
 """
 

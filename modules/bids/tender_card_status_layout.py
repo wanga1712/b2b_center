@@ -1,4 +1,12 @@
-"""Модуль для создания layout статуса в карточке закупки."""
+"""
+MODULE: modules.bids.tender_card_status_layout
+RESPONSIBILITY: Layout helper for tender card status section.
+ALLOWED: PyQt5.
+FORBIDDEN: Business logic.
+ERRORS: None.
+
+Модуль для создания layout статуса в карточке закупки.
+"""
 
 from PyQt5.QtWidgets import QHBoxLayout
 

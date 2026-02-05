@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.document_download_thread
+RESPONSIBILITY: Asynchronous document downloading thread.
+ALLOWED: PyQt5.QtCore, pathlib, concurrent.futures, loguru, services.document_search.
+FORBIDDEN: Database interaction.
+ERRORS: None.
+
 Модуль для асинхронного скачивания документов в отдельном потоке.
 """
 

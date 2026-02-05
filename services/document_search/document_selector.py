@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.document_selector
+RESPONSIBILITY: Select and prioritize documents for download/processing from a list.
+ALLOWED: logging, re.
+FORBIDDEN: Network access, file IO.
+ERRORS: DocumentSearchError.
+
 Модуль для выбора и группировки документов.
 
 Класс DocumentSelector отвечает за:

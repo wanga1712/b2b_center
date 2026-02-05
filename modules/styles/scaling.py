@@ -1,4 +1,10 @@
 """
+MODULE: modules.styles.scaling
+RESPONSIBILITY: Global interface scaling logic.
+ALLOWED: PyQt5.
+FORBIDDEN: Business logic, heavy imports.
+ERRORS: None.
+
 Глобальное масштабирование для всего приложения на основе физического размера экрана и DPI
 """
 import sys

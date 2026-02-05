@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.bids_settings_tab
+RESPONSIBILITY: Settings UI for bids widget.
+ALLOWED: PyQt5, loguru, modules.bids.settings_*, modules.styles.
+FORBIDDEN: Direct SQL (use managers/repo).
+ERRORS: None.
+
 Вкладка настроек для виджета закупок
 
 Содержит UI и логику для:
@@ -29,7 +35,7 @@ from modules.bids.settings_stop_words_manager import StopWordsManager
 from modules.bids.settings_document_stop_phrases_manager import DocumentStopPhrasesManager
 from modules.bids.settings_categories_manager import CategoriesManager
 from modules.bids.search_params_cache import SearchParamsCache
-from services.tender_repository import TenderRepository
+from services.tender_services.tender_repository_facade import TenderRepositoryFacade
 from core.exceptions import DatabaseConnectionError, DatabaseQueryError
 
 
@@ -42,7 +48,7 @@ class BidsSettingsTab(QWidget):
     
     def __init__(
         self,
-        tender_repo: TenderRepository,
+        tender_repo: TenderRepositoryFacade,
         user_id: int,
         search_params_cache: SearchParamsCache,
         parent_widget: Optional[QWidget] = None

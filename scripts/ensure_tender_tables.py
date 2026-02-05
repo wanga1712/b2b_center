@@ -1,4 +1,10 @@
 """
+MODULE: scripts.ensure_tender_tables
+RESPONSIBILITY: Checking and creating tender_document_matches and tender_document_match_details tables.
+ALLOWED: sys, pathlib, loguru, config.settings, core.tender_database, core.exceptions.
+FORBIDDEN: None.
+ERRORS: None.
+
 Скрипт для проверки и создания необходимых таблиц в базе данных tender_monitor.
 
 Проверяет существование таблиц:

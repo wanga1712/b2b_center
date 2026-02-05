@@ -1,6 +1,11 @@
-from __future__ import annotations
+"""
+MODULE: modules.travel_report.logic
+RESPONSIBILITY: Business logic and data models for Travel Report.
+ALLOWED: dataclasses, datetime, pathlib, typing, openpyxl.
+FORBIDDEN: UI interaction.
+ERRORS: None.
 
-"""Бизнес-логика отчета по командировке.
+Бизнес-логика отчета по командировке.
 
 Содержит модели данных и экспорт отчета в Excel.
 """

@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Анализ размеров модулей проекта для рефакторинга."""
+"""
+MODULE: scripts.analyze_module_sizes
+RESPONSIBILITY: Analyzing project module sizes for refactoring.
+ALLOWED: os, pathlib.
+FORBIDDEN: None.
+ERRORS: None.
+
+Анализ размеров модулей проекта для рефакторинга.
+"""
 import os
 from pathlib import Path
 

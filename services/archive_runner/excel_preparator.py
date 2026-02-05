@@ -1,4 +1,10 @@
 """
+MODULE: services.archive_runner.excel_preparator
+RESPONSIBILITY: Prepare Excel files for processing (copy, verify).
+ALLOWED: shutil, pathlib, ExcelFileTester, logging.
+FORBIDDEN: Parsing logic.
+ERRORS: None.
+
 Модуль для подготовки Excel файлов к обработке.
 
 Содержит логику копирования и проверки Excel файлов.
@@ -46,10 +52,15 @@ class ExcelPreparator:
             if self._excel_tester.verify(target_path):
                 return target_path
 
-            logger.error(
-                f"Файл {source_path.name} не прошел проверку после копирования, удаляем копию"
+            logger.warning(
+                f"Файл {source_path.name} не прошел проверку после копирования, удаляем поврежденный файл"
             )
+            # Удаляем поврежденный файл
             self._remove_file_force(target_path)
+            # Удаляем исходный поврежденный файл для повторного скачивания
+            if source_path.exists():
+                logger.info(f"Удаление поврежденного исходного файла {source_path.name} для повторного скачивания")
+                self._remove_file_force(source_path)
             return None
         except Exception as error:
             logger.error(f"Не удалось подготовить Excel файл {source_path.name}: {error}")

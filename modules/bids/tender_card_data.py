@@ -1,11 +1,17 @@
 """
+MODULE: modules.bids.tender_card_data
+RESPONSIBILITY: Data fetching and caching for tender cards.
+ALLOWED: typing, services.tender_match_repository.
+FORBIDDEN: Direct SQL queries.
+ERRORS: None.
+
 Модуль для работы с данными карточки закупки (кэширование и получение).
 """
 
 from typing import Dict, Any, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from services.tender_match_repository import TenderMatchRepository
+    from services.match_services.tender_match_repository_facade import TenderMatchRepositoryFacade as TenderMatchRepository
 
 
 def fetch_match_summary(
@@ -15,7 +21,7 @@ def fetch_match_summary(
     cache: Optional[Dict[str, Any]]
 ) -> Optional[Dict[str, Any]]:
     """Получение сводки совпадений с кэшем."""
-    if not tender_match_repository or not tender_id:
+    if tender_match_repository is None or tender_id is None:
         return None
     if cache is None:
         return tender_match_repository.get_match_summary(tender_id, registry_type)
@@ -31,7 +37,7 @@ def fetch_match_details(
     limit: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """Получение детальных совпадений с кэшем."""
-    if not tender_match_repository or not tender_id:
+    if tender_match_repository is None or tender_id is None:
         return []
     if cache is None:
         return tender_match_repository.get_match_details(

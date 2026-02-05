@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.file_format_detector
+RESPONSIBILITY: Detect file format by magic bytes.
+ALLOWED: logging.
+FORBIDDEN: Full file parsing (should be fast).
+ERRORS: None.
+
 Определение формата файла по magic bytes.
 """
 

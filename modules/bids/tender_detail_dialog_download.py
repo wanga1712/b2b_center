@@ -1,4 +1,12 @@
-"""Модуль для обработки скачивания документов в диалоге."""
+"""
+MODULE: modules.bids.tender_detail_dialog_download
+RESPONSIBILITY: Handle document downloading in detail dialog.
+ALLOWED: PyQt5, pathlib, loguru, modules.bids.document_download_thread.
+FORBIDDEN: Database interaction.
+ERRORS: None.
+
+Модуль для обработки скачивания документов в диалоге.
+"""
 
 from pathlib import Path
 from PyQt5.QtWidgets import QMessageBox

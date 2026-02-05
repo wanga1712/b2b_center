@@ -1,4 +1,10 @@
 """
+MODULE: scripts.archive_debug
+RESPONSIBILITY: Debugging archive extraction and search functionality.
+ALLOWED: argparse, sys, pathlib, typing, loguru, config.settings, core.database, core.exceptions, services.document_search_service.
+FORBIDDEN: None.
+ERRORS: None.
+
 Утилита для тестирования распаковки архивов и поиска внутри XLSX.
 
 Запускается отдельно от GUI, чтобы быстрее диагностировать проблемы

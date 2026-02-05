@@ -1,4 +1,10 @@
 """
+MODULE: modules.crm.sales_funnel.models
+RESPONSIBILITY: Data models (dataclasses/Enums) for Sales Funnel.
+ALLOWED: dataclasses, typing, datetime, enum.
+FORBIDDEN: Logic, DB access, UI.
+ERRORS: None.
+
 Модели данных для воронок продаж
 """
 

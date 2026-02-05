@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.search_params_cache
+RESPONSIBILITY: Caching search parameters and tenders for fast access.
+ALLOWED: typing, loguru, hashlib.
+FORBIDDEN: Direct DB queries (except storing data).
+ERRORS: None.
+
 Модуль для кэширования параметров поиска закупок.
 
 Сохраняет параметры поиска (категория, регион) в памяти,
@@ -20,6 +26,7 @@ class SearchParamsCache:
         self._region_id: Optional[int] = None
         self._region_data: Optional[Dict[str, Any]] = None
         self._okpd_search_text: Optional[str] = None
+        self._settings_saved: bool = False  # Флаг "настройки сохранены пользователем"
         
         # Кэш закупок: ключ = (registry_type, tender_type, user_id, filters_hash)
         # значение = {'tenders': List[Dict], 'total_count': int, 'filters': Dict}
@@ -57,12 +64,22 @@ class SearchParamsCache:
         """Получение сохраненного текста поиска ОКПД"""
         return self._okpd_search_text
     
+    def set_settings_saved(self, saved: bool) -> None:
+        """Установка флага 'настройки сохранены'"""
+        self._settings_saved = saved
+        logger.debug(f"Флаг 'настройки сохранены': {saved}")
+    
+    def is_settings_saved(self) -> bool:
+        """Проверка, были ли настройки сохранены пользователем"""
+        return self._settings_saved
+    
     def clear(self) -> None:
         """Очистка кэша"""
         self._category_id = None
         self._region_id = None
         self._region_data = None
         self._okpd_search_text = None
+        self._settings_saved = False
         logger.debug("Кэш параметров поиска очищен")
     
     def has_cached_params(self) -> bool:

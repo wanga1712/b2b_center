@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.document_search_base
+RESPONSIBILITY: Core logic for searching keywords/products within parsed document content.
+ALLOWED: keyword_matcher, logging.
+FORBIDDEN: Parsing logic (use iterators), IO operations.
+ERRORS: None.
+
 Базовый модуль для универсального поиска совпадений в документах.
 
 Содержит общую логику поиска, которая используется для всех типов документов

@@ -1,8 +1,12 @@
-from __future__ import annotations
+"""
+MODULE: modules.travel_report.widget
+RESPONSIBILITY: Travel Report UI widget.
+ALLOWED: typing, pathlib, json, time, PyQt5, config.settings, modules.travel_report.*.
+FORBIDDEN: Direct DB access.
+ERRORS: None.
 
-from __future__ import annotations
-
-"""Виджет отчета по командировке (компактный, с разнесенной логикой)."""
+Виджет отчета по командировке (компактный, с разнесенной логикой).
+"""
 
 from pathlib import Path
 from typing import Optional, Dict

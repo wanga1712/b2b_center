@@ -1,4 +1,10 @@
 """
+MODULE: modules.kp.price_edit_dialog
+RESPONSIBILITY: Dialog for editing product price.
+ALLOWED: PyQt5, modules.styles.*.
+FORBIDDEN: Heavy business logic.
+ERRORS: None.
+
 Диалог для редактирования цены товара
 """
 

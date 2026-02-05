@@ -1,4 +1,10 @@
 """
+MODULE: scripts.process_downloaded_archives
+RESPONSIBILITY: Processing downloaded archives, extracting XLSX, and matching with the DB.
+ALLOWED: sys, time, pathlib, typing, loguru, config.settings, core.database, core.exceptions, services.document_search_service, services.archive_processing_service.
+FORBIDDEN: None.
+ERRORS: None.
+
 Боевой скрипт для обработки уже скачанных архивов из папки загрузки.
 
 Находит все архивы в папке, объединяет многофайловые, распаковывает,

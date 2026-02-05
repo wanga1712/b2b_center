@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.tender_card_utils
+RESPONSIBILITY: Utility functions for tender cards (text formatting, links).
+ALLOWED: PyQt5, typing.
+FORBIDDEN: External dependencies.
+ERRORS: None.
+
 Утилиты для работы с карточками закупок.
 """
 

@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.tender_list_widget
+RESPONSIBILITY: Display list of tender cards with loading indicator.
+ALLOWED: PyQt5, typing, loguru, modules.bids.tender_card, modules.styles.general_styles, services.document_search_service.
+FORBIDDEN: Direct SQL queries (use TenderCard/Repository).
+ERRORS: None.
+
 Виджет списка карточек закупок с индикатором загрузки
 """
 
@@ -22,11 +28,7 @@ from pathlib import Path
 from datetime import datetime
 
 if TYPE_CHECKING:
-    from services.tender_match_repository import TenderMatchRepository
-
-# #region agent log
-DEBUG_LOG_PATH = Path(__file__).parent.parent.parent / ".cursor" / "debug.log"
-# #endregion
+    from services.match_services.tender_match_repository_facade import TenderMatchRepositoryFacade as TenderMatchRepository
 
 
 class TenderListWidget(QWidget):
@@ -165,7 +167,10 @@ class TenderListWidget(QWidget):
         for registry_type, tender_ids in tenders_by_registry.items():
             try:
                 # Загружаем match_results батчем
-                match_results = self.tender_match_repository.get_match_results_batch(tender_ids, registry_type)
+                if self.tender_match_repository:
+                    match_results = self.tender_match_repository.get_match_results_batch(tender_ids, registry_type)
+                else:
+                    match_results = {}
                 
                 # Для каждого результата вычисляем summary
                 for tender_id, match_result in match_results.items():
@@ -279,7 +284,8 @@ class TenderListWidget(QWidget):
                     if '223' in platform or 'закон' in platform:
                         registry_type = '223fz'
                 
-                match_summary = self.tender_match_repository.get_match_summary(tender_id, registry_type)
+                if self.tender_match_repository:
+                    match_summary = self.tender_match_repository.get_match_summary(tender_id, registry_type)
             except Exception as e:
                 logger.debug(f"Не удалось получить match_summary для тендера {tender_id}: {e}")
         
@@ -318,6 +324,28 @@ class TenderListWidget(QWidget):
         return 999
     
     def set_tenders(self, tenders: List[Dict[str, Any]], total_count: Optional[int] = None):
+        # #region agent log
+        import json
+        import time
+        log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "G",
+                    "location": "tender_list_widget.py:set_tenders:entry",
+                    "message": "Обновление списка карточек закупок",
+                    "data": {
+                        "tenders_count": len(tenders) if tenders else 0,
+                        "total_count": total_count,
+                        "existing_cards_count": len(self.tender_cards) if hasattr(self, 'tender_cards') else 0
+                    },
+                    "timestamp": int(time.time() * 1000)
+                }, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
         """
         Установить/обновить список закупок с синхронизацией карточек.
         
@@ -333,29 +361,7 @@ class TenderListWidget(QWidget):
         """
         import time
         start_time = time.time()
-        
-        # #region agent log
-        try:
-            log_entry = {
-                "sessionId": "debug-session",
-                "runId": "perf-1",
-                "hypothesisId": "PERF1",
-                "location": f"{__file__}:set_tenders:start",
-                "message": "Начало set_tenders",
-                "data": {
-                    "tenders_count": len(tenders),
-                    "total_count": total_count,
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000)
-            }
-            with open(DEBUG_LOG_PATH, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
-        except Exception:
-            pass
-        # #endregion
-        
         self.hide_loading()
-        
         if not tenders:
             # Если нет торгов - очищаем все карточки
             self.clear_cards()
@@ -375,26 +381,6 @@ class TenderListWidget(QWidget):
         batch_load_time = time.time() - batch_load_start
         sort_time = 0.0  # Инициализируем для случая, если сортировка не выполнится
         
-        # #region agent log
-        try:
-            log_entry = {
-                "sessionId": "debug-session",
-                "runId": "perf-1",
-                "hypothesisId": "PERF2",
-                "location": f"{__file__}:set_tenders:batch_load",
-                "message": "Батч-загрузка match_summaries завершена",
-                "data": {
-                    "batch_load_time_ms": int(batch_load_time * 1000),
-                    "cached_count": len(match_summaries_cache),
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000)
-            }
-            with open(DEBUG_LOG_PATH, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
-        except Exception:
-            pass
-        # #endregion
-        
         # Сортируем тендеры по приоритету (используя кэш)
         sort_start = time.time()
         logger.info(f"Синхронизация списка закупок: получено {len(tenders)} торгов")
@@ -407,33 +393,9 @@ class TenderListWidget(QWidget):
         # Создаем множество ID торгов из нового списка
         new_tender_ids = {tender.get('id') for tender in sorted_tenders if tender.get('id')}
         
-        # #region agent log
-        try:
-            existing_card_ids = {card.tender_data.get('id') for card in self.tender_cards if card.tender_data.get('id')}
-            log_entry = {
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "A",
-                "location": f"{__file__}:232",
-                "message": "set_tenders: входные данные",
-                "data": {
-                    "existing_card_ids": list(existing_card_ids),
-                    "new_tender_ids": list(new_tender_ids),
-                    "existing_count": len(existing_card_ids),
-                    "new_count": len(new_tender_ids),
-                    "cards_to_remove_ids": list(existing_card_ids - new_tender_ids)
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000)
-            }
-            with open(DEBUG_LOG_PATH, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
-        except Exception as e:
-            pass
-        # #endregion
-        
-        updated_count = 0
-        created_count = 0
-        removed_count = 0
+        updated_count: int = 0
+        created_count: int = 0
+        removed_count: int = 0
         
         # Удаляем карточки торгов, которых нет в новом списке
         # (они стали неинтересными или были удалены - SQL уже отфильтровал их)
@@ -445,35 +407,6 @@ class TenderListWidget(QWidget):
             
             # Если торг отсутствует в новом списке - удаляем карточку
             if tender_id not in new_tender_ids:
-                # #region agent log
-                try:
-                    registry_type = card.tender_data.get('registry_type', 'unknown')
-                    is_interesting = None
-                    if self.tender_match_repository:
-                        try:
-                            match_result = self.tender_match_repository.get_match_result(tender_id, registry_type)
-                            is_interesting = match_result.get('is_interesting') if match_result else None
-                        except:
-                            pass
-                    log_entry = {
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "B",
-                        "location": f"{__file__}:247",
-                        "message": "Удаление карточки: торг отсутствует в новом списке",
-                        "data": {
-                            "tender_id": tender_id,
-                            "registry_type": registry_type,
-                            "is_interesting_in_db": is_interesting,
-                            "will_be_removed": True
-                        },
-                        "timestamp": int(datetime.now().timestamp() * 1000)
-                    }
-                    with open(DEBUG_LOG_PATH, 'a', encoding='utf-8') as f:
-                        f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
-                except Exception as e:
-                    pass
-                # #endregion
                 cards_to_remove.append(card)
                 removed_count += 1
                 logger.debug(f"Удаляем карточку торга ID {tender_id} (отсутствует в новом списке - стал неинтересным или удален)")
@@ -502,32 +435,21 @@ class TenderListWidget(QWidget):
                 if card not in self.tender_cards:
                     continue
                 # #region agent log
+                import json
+                import time
+                log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
                 try:
-                    registry_type = tender.get('registry_type', 'unknown')
-                    is_interesting = None
-                    if self.tender_match_repository:
-                        try:
-                            match_result = self.tender_match_repository.get_match_result(tender_id, registry_type)
-                            is_interesting = match_result.get('is_interesting') if match_result else None
-                        except:
-                            pass
-                    log_entry = {
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "C",
-                        "location": f"{__file__}:269",
-                        "message": "Обновление существующей карточки",
-                        "data": {
-                            "tender_id": tender_id,
-                            "registry_type": registry_type,
-                            "is_interesting_in_db": is_interesting,
-                            "will_be_updated": True
-                        },
-                        "timestamp": int(datetime.now().timestamp() * 1000)
-                    }
-                    with open(DEBUG_LOG_PATH, 'a', encoding='utf-8') as f:
-                        f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
-                except Exception as e:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "E",
+                            "location": "tender_list_widget.py:set_tenders:before_update_status",
+                            "message": "Вызов update_status для карточки",
+                            "data": {"tender_id": tender_id},
+                            "timestamp": int(time.time() * 1000)
+                        }, ensure_ascii=False) + "\n")
+                except Exception:
                     pass
                 # #endregion
                 try:
@@ -557,55 +479,6 @@ class TenderListWidget(QWidget):
             f"удалено {removed_count} карточек. Время: {total_time:.2f}с "
             f"(батч-загрузка: {batch_load_time:.2f}с, сортировка: {sort_time:.2f}с)"
         )
-        
-        # #region agent log
-        try:
-            log_entry = {
-                "sessionId": "debug-session",
-                "runId": "perf-1",
-                "hypothesisId": "PERF3",
-                "location": f"{__file__}:set_tenders:end",
-                "message": "set_tenders завершен",
-                "data": {
-                    "total_time_ms": int(total_time * 1000),
-                    "batch_load_time_ms": int(batch_load_time * 1000),
-                    "sort_time_ms": int(sort_time * 1000),
-                    "updated_count": updated_count,
-                    "created_count": created_count,
-                    "removed_count": removed_count,
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000)
-            }
-            with open(DEBUG_LOG_PATH, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
-        except Exception:
-            pass
-        # #endregion
-        
-        # #region agent log
-        try:
-            remaining_card_ids = {card.tender_data.get('id') for card in self.tender_cards if card.tender_data.get('id')}
-            log_entry = {
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "D",
-                "location": f"{__file__}:295",
-                "message": "set_tenders: результат синхронизации",
-                "data": {
-                    "remaining_card_ids": list(remaining_card_ids),
-                    "remaining_count": len(remaining_card_ids),
-                    "updated_count": updated_count,
-                    "created_count": created_count,
-                    "removed_count": removed_count,
-                    "cards_not_in_new_list": list(remaining_card_ids - new_tender_ids)
-                },
-                "timestamp": int(datetime.now().timestamp() * 1000)
-            }
-            with open(DEBUG_LOG_PATH, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
-        except Exception as e:
-            pass
-        # #endregion
         
         # Добавляем растягивающийся элемент в конец (если его еще нет)
         if self.cards_layout.count() > 0:

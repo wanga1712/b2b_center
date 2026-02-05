@@ -1,4 +1,10 @@
 """
+MODULE: modules.kp.unit_edit_dialog
+RESPONSIBILITY: Dialog for editing product unit/size.
+ALLOWED: PyQt5, modules.styles.*.
+FORBIDDEN: Heavy business logic.
+ERRORS: None.
+
 Диалог для редактирования единицы измерения товара
 """
 

@@ -1,4 +1,10 @@
 """
+MODULE: scripts.apply_optimization_indexes
+RESPONSIBILITY: Applying general optimization indexes to database.
+ALLOWED: os, sys, pathlib, dotenv, psycopg2, psycopg2.extras, loguru.
+FORBIDDEN: None.
+ERRORS: None.
+
 Скрипт для применения индексов оптимизации к базе данных tender_monitor.
 Запуск: python -m scripts.apply_optimization_indexes
 """

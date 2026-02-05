@@ -1,4 +1,12 @@
-"""Финальная проверка всех статусов"""
+"""
+MODULE: scripts.final_status_check
+RESPONSIBILITY: Performing a final check of all tender statuses.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv.
+FORBIDDEN: None.
+ERRORS: None.
+
+Финальная проверка всех статусов
+"""
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os

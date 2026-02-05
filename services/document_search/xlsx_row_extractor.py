@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.xlsx_row_extractor
+RESPONSIBILITY: Extract specific row data from .xlsx sheets.
+ALLOWED: openpyxl, xlsx_row_data_processor, excel_utils, error_logger, logging.
+FORBIDDEN: Database access.
+ERRORS: None.
+
 Извлечение данных из строк .xlsx файлов.
 """
 

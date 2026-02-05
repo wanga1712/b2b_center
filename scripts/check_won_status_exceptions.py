@@ -1,4 +1,12 @@
-"""Проверка условий и исключений для статуса 'Разыграна'"""
+"""
+MODULE: scripts.check_won_status_exceptions
+RESPONSIBILITY: Checking exceptions and edge cases for 'Won' status logic.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv.
+FORBIDDEN: None.
+ERRORS: None.
+
+Проверка условий и исключений для статуса 'Разыграна'
+"""
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os

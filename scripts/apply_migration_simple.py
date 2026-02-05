@@ -1,4 +1,10 @@
 """
+MODULE: scripts.apply_migration_simple
+RESPONSIBILITY: Simple migration application (structure only).
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv, sys.
+FORBIDDEN: None.
+ERRORS: None.
+
 ПРОСТАЯ миграция - только создание структуры, БЕЗ обновления данных
 Используйте этот скрипт, если основной зависает
 """

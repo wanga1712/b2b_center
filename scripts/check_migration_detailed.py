@@ -1,4 +1,10 @@
 """
+MODULE: scripts.check_migration_detailed
+RESPONSIBILITY: Detailed status check for tender status migration.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv, loguru, time, traceback.
+FORBIDDEN: None.
+ERRORS: None.
+
 Детальная проверка миграции статусов
 
 Показывает:

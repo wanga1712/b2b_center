@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.keyword_matcher
+RESPONSIBILITY: Tokenize phrases and match keywords against text (fuzzy matching).
+ALLOWED: re, rapidfuzz.
+FORBIDDEN: IO operations, database access.
+ERRORS: None.
+
 Модуль для работы с ключевыми словами и проверки совпадений.
 """
 

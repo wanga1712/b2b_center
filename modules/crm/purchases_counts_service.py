@@ -1,4 +1,10 @@
 """
+MODULE: modules.crm.purchases_counts_service
+RESPONSIBILITY: Count purchases by status/type for CRM dashboard.
+ALLOWED: typing, loguru, psycopg2, services.tender_repository, services.tender_repositories.*.
+FORBIDDEN: UI modules (PyQt5).
+ERRORS: None.
+
 Сервис для подсчета количества закупок
 
 Отвечает за получение количества закупок различных типов
@@ -9,7 +15,7 @@ from typing import Dict, Optional, List
 from loguru import logger
 from psycopg2.extras import RealDictCursor
 
-from services.tender_repository import TenderRepository
+from services.tender_services.tender_repository_facade import TenderRepositoryFacade
 from services.tender_repositories.feeds.feed_filters import FeedFilters, WonFilters
 
 
@@ -20,7 +26,7 @@ class PurchasesCountsService:
     Используется для обновления счетчиков в подменю закупок.
     """
     
-    def __init__(self, tender_repo: TenderRepository, user_id: int):
+    def __init__(self, tender_repo: TenderRepositoryFacade, user_id: int):
         """
         Инициализация сервиса
         

@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.bids_cache_manager
+RESPONSIBILITY: Restore search parameters from cache.
+ALLOWED: typing, loguru, modules.bids.search_params_cache.
+FORBIDDEN: Database interaction (use repository/other managers).
+ERRORS: None.
+
 Модуль для управления кэшем параметров поиска в виджете закупок
 
 Содержит методы для восстановления параметров из кэша

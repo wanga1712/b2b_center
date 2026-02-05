@@ -1,4 +1,10 @@
 """
+MODULE: services.tender_repositories.region_repository
+RESPONSIBILITY: Access region data.
+ALLOWED: typing, loguru, core.tender_database, psycopg2.extras.
+FORBIDDEN: Business logic outside DB operations.
+ERRORS: Database exceptions.
+
 Репозиторий для работы с регионами.
 """
 

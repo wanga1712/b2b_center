@@ -1,11 +1,17 @@
 """
+MODULE: services.tender_repositories.feeds.won_tenders_service
+RESPONSIBILITY: Service for fetching won tenders.
+ALLOWED: datetime, typing, loguru, psycopg2.extras, core.tender_database, services.tender_repositories.
+FORBIDDEN: Hardcoded SQL literals (use query builder).
+ERRORS: Database exceptions.
+
 Сервис загрузки разыгранных тендеров 44ФЗ и 223ФЗ.
 """
 
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from loguru import logger
 from psycopg2.extras import RealDictCursor
@@ -28,10 +34,13 @@ class WonTendersService(BaseFeedService):
         super().__init__(db_manager, documents_repo)
 
     def fetch_44fz(self, filters: WonFilters) -> List[Dict[str, Any]]:
-        okpd_ids = self._resolve_okpd_ids(filters.okpd_codes)
-        if not okpd_ids:
-            logger.info("Нет ОКПД кодов для пользователя %s (разыгранные 44ФЗ)", filters.user_id)
-            return []
+        # Если OKPD коды не указаны (None или пустой список), получаем все торги без фильтра OKPD
+        if not filters.okpd_codes:  # None или пустой список
+            okpd_ids = None  # Без фильтра OKPD
+        else:
+            okpd_ids = self._resolve_okpd_ids(filters.okpd_codes)
+            if not okpd_ids:
+                return []
 
         select_query, select_params = self._build_won_query("44fz", filters, okpd_ids)
         count_query, count_params = self._build_won_count_query("44fz", filters, okpd_ids)
@@ -45,10 +54,13 @@ class WonTendersService(BaseFeedService):
         )
 
     def fetch_223fz(self, filters: WonFilters) -> List[Dict[str, Any]]:
-        okpd_ids = self._resolve_okpd_ids(filters.okpd_codes)
-        if not okpd_ids:
-            logger.info("Нет ОКПД кодов для пользователя %s (разыгранные 223ФЗ)", filters.user_id)
-            return []
+        # Если OKPD коды не указаны (None или пустой список), получаем все торги без фильтра OKPD
+        if not filters.okpd_codes:  # None или пустой список
+            okpd_ids = None  # Без фильтра OKPD
+        else:
+            okpd_ids = self._resolve_okpd_ids(filters.okpd_codes)
+            if not okpd_ids:
+                return []
 
         select_query, select_params = self._build_won_query("223fz", filters, okpd_ids)
         count_query, count_params = self._build_won_count_query("223fz", filters, okpd_ids)
@@ -65,7 +77,7 @@ class WonTendersService(BaseFeedService):
         self,
         registry_type: str,
         filters: WonFilters,
-        okpd_ids: List[int],
+        okpd_ids: Optional[List[int]],
     ) -> tuple[str, List[Any]]:
         select_fields = TenderQueryBuilder.build_base_select_fields()
         table_name = TenderQueryBuilder.resolve_registry_table(registry_type)
@@ -91,9 +103,11 @@ class WonTendersService(BaseFeedService):
             # Исключаем "Плохие" для 223ФЗ
             query += TenderQueryBuilder.build_status_filter_223fz()
 
-        placeholders = ",".join(["%s"] * len(okpd_ids))
-        query += f" AND r.okpd_id IN ({placeholders})"
-        params.extend(okpd_ids)
+        # Добавляем фильтр OKPD только если он указан
+        if okpd_ids:
+            placeholders = ",".join(["%s"] * len(okpd_ids))
+            query += f" AND r.okpd_id IN ({placeholders})"
+            params.extend(okpd_ids)
 
         region_filter, region_params = TenderQueryBuilder.build_region_filter(filters.region_id)
         query += region_filter
@@ -117,7 +131,7 @@ class WonTendersService(BaseFeedService):
         self,
         registry_type: str,
         filters: WonFilters,
-        okpd_ids: List[int],
+        okpd_ids: Optional[List[int]],
     ) -> tuple[str, List[Any]]:
         today = date.today()
         min_delivery_date = today + timedelta(days=filters.min_delivery_days)
@@ -148,9 +162,11 @@ class WonTendersService(BaseFeedService):
             # Исключаем "Плохие" для 223ФЗ
             query += TenderQueryBuilder.build_status_filter_223fz()
 
-        placeholders = ",".join(["%s"] * len(okpd_ids))
-        query += f" AND r.okpd_id IN ({placeholders})"
-        params.extend(okpd_ids)
+        # Добавляем фильтр OKPD только если он указан
+        if okpd_ids:
+            placeholders = ",".join(["%s"] * len(okpd_ids))
+            query += f" AND r.okpd_id IN ({placeholders})"
+            params.extend(okpd_ids)
 
         region_filter, region_params = TenderQueryBuilder.build_region_filter(filters.region_id)
         query += region_filter

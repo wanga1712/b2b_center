@@ -1,4 +1,12 @@
-"""Проверка блокировок в БД"""
+"""
+MODULE: scripts.check_db_locks
+RESPONSIBILITY: Checking active database locks.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv.
+FORBIDDEN: None.
+ERRORS: None.
+
+Проверка блокировок в БД
+"""
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os

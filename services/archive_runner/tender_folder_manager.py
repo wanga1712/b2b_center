@@ -1,4 +1,10 @@
 """
+MODULE: services.archive_runner.tender_folder_manager
+RESPONSIBILITY: Manage file system directories for tenders.
+ALLOWED: pathlib, shutil, logging.
+FORBIDDEN: Business logic regarding tender status (only FS ops).
+ERRORS: None.
+
 Модуль для управления папками тендеров.
 """
 

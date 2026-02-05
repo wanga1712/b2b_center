@@ -1,4 +1,10 @@
 """
+MODULE: modules.kp.name_edit_dialog
+RESPONSIBILITY: Dialog for editing product name.
+ALLOWED: PyQt5, modules.styles.*.
+FORBIDDEN: Heavy business logic.
+ERRORS: None.
+
 Диалог для редактирования наименования товара
 """
 

@@ -1,4 +1,10 @@
 """
+MODULE: services.tender_repositories
+RESPONSIBILITY: Expose repository classes.
+ALLOWED: Internal modules.
+FORBIDDEN: None.
+ERRORS: None.
+
 Репозитории для работы с данными торгов.
 """
 

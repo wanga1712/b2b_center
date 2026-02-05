@@ -1,4 +1,10 @@
 """
+MODULE: services.archive_runner.existing_files_processor
+RESPONSIBILITY: Scan and register existing files in tender directories.
+ALLOWED: pathlib, regex, logging.
+FORBIDDEN: Modifying files (read-only scan).
+ERRORS: None.
+
 Модуль для обработки уже существующих файлов в директории проектов.
 """
 
@@ -54,38 +60,88 @@ class ExistingFilesProcessor:
     def build_records(self, folder: Path) -> List[Dict[str, List[Path]]]:
         """
         Собирает список записей (архивы/Excel) из существующей директории.
+        Защита от MemoryError при обработке файлов с очень длинными именами.
         """
         records: List[Dict[str, List[Path]]] = []
         if not folder.exists():
             return records
 
-        for file_path in folder.rglob("*"):
-            if not file_path.is_file():
-                continue
-            if file_path.name.startswith("~$"):
-                continue
-            suffix = file_path.suffix.lower()
-            if suffix in self.ARCHIVE_EXTENSIONS or suffix in self.EXCEL_EXTENSIONS:
-                records.append(
-                    {
-                        "doc": None,
-                        "paths": [file_path],
-                        "source": "existing",
-                        "retries": 0,
-                    }
-                )
+        try:
+            for file_path in folder.rglob("*"):
+                try:
+                    if not file_path.is_file():
+                        continue
+                    
+                    # Защита от MemoryError при обработке длинных путей
+                    try:
+                        # Пытаемся получить имя файла безопасным способом
+                        file_name = str(file_path.name)
+                        # Если имя слишком длинное (> 250 символов), пропускаем
+                        if len(file_name) > 250:
+                            logger.debug(f"Пропуск файла с очень длинным именем (> 250 символов): {file_name[:50]}...")
+                            continue
+                        
+                        if file_name.startswith("~$"):
+                            continue
+                        
+                        suffix = file_path.suffix.lower()
+                    except (MemoryError, OSError, ValueError) as path_error:
+                        # Ошибка при работе с путем (слишком длинный путь или другие проблемы)
+                        logger.warning(f"Ошибка при обработке пути файла: {path_error}, пропускаем")
+                        continue
+                    
+                    if suffix in self.ARCHIVE_EXTENSIONS or suffix in self.EXCEL_EXTENSIONS:
+                        records.append(
+                            {
+                                "doc": None,
+                                "paths": [file_path],
+                                "source": "existing",
+                                "retries": 0,
+                            }
+                        )
+                except Exception as file_error:
+                    # Пропускаем файлы, которые не удалось обработать
+                    logger.debug(f"Ошибка при проверке файла: {file_error}, пропускаем")
+                    continue
+        except Exception as folder_error:
+            logger.warning(f"Ошибка при сканировании папки {folder.name}: {folder_error}")
+        
         logger.debug(f"В папке {folder.name} найдено файлов для повторной обработки: {len(records)}")
         return records
 
     def _folder_contains_documents(self, folder: Path) -> bool:
         """
         Проверяет, есть ли в папке документы с поддерживаемыми расширениями.
+        Защита от MemoryError при обработке файлов с очень длинными именами.
         """
-        for file_path in folder.rglob("*"):
-            if not file_path.is_file():
-                continue
-            suffix = file_path.suffix.lower()
-            if suffix in self.ARCHIVE_EXTENSIONS or suffix in self.EXCEL_EXTENSIONS:
-                return True
+        try:
+            for file_path in folder.rglob("*"):
+                try:
+                    if not file_path.is_file():
+                        continue
+                    
+                    # Защита от MemoryError при обработке длинных путей
+                    try:
+                        # Пытаемся получить имя файла безопасным способом
+                        file_name = str(file_path.name)
+                        # Если имя слишком длинное (> 250 символов), пропускаем
+                        if len(file_name) > 250:
+                            logger.debug(f"Пропуск файла с очень длинным именем (> 250 символов): {file_name[:50]}...")
+                            continue
+                        
+                        suffix = file_path.suffix.lower()
+                    except (MemoryError, OSError, ValueError) as path_error:
+                        # Ошибка при работе с путем (слишком длинный путь или другие проблемы)
+                        logger.warning(f"Ошибка при обработке пути файла: {path_error}, пропускаем")
+                        continue
+                    
+                    if suffix in self.ARCHIVE_EXTENSIONS or suffix in self.EXCEL_EXTENSIONS:
+                        return True
+                except Exception as file_error:
+                    # Пропускаем файлы, которые не удалось обработать
+                    logger.debug(f"Ошибка при проверке файла: {file_error}, пропускаем")
+                    continue
+        except Exception as folder_error:
+            logger.warning(f"Ошибка при сканировании папки {folder.name}: {folder_error}")
         return False
 

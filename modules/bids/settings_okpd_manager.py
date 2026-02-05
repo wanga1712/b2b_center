@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.settings_okpd_manager
+RESPONSIBILITY: Manage user OKPD codes in the settings UI.
+ALLOWED: typing, PyQt5.QtWidgets, PyQt5.QtCore, loguru, services.tender_repository, psycopg2.extras.
+FORBIDDEN: Complex business logic not related to settings management.
+ERRORS: None.
+
 Модуль для управления ОКПД кодами в настройках.
 """
 
@@ -7,13 +13,13 @@ from PyQt5.QtWidgets import QListWidget, QListWidgetItem, QMessageBox, QInputDia
 from PyQt5.QtCore import Qt
 from loguru import logger
 
-from services.tender_repository import TenderRepository
+from services.tender_services.tender_repository_facade import TenderRepositoryFacade
 
 
 class OKPDManager:
     """Класс для управления ОКПД кодами"""
     
-    def __init__(self, tender_repo: TenderRepository, user_id: int):
+    def __init__(self, tender_repo: TenderRepositoryFacade, user_id: int):
         """
         Инициализация менеджера ОКПД
         

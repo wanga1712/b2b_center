@@ -1,4 +1,10 @@
 """
+MODULE: services.tender_repositories.tender_documents_repository
+RESPONSIBILITY: Access tender documents (44FZ/223FZ).
+ALLOWED: typing, loguru, core.tender_database, psycopg2.extras.
+FORBIDDEN: Business logic outside DB operations.
+ERRORS: Database exceptions.
+
 Репозиторий для работы с документами тендеров.
 """
 

@@ -1,4 +1,12 @@
-"""Построение UI для отчета по командировке."""
+"""
+MODULE: modules.travel_report.ui_builder
+RESPONSIBILITY: Construction of Travel Report UI elements.
+ALLOWED: typing, dataclasses, PyQt5, modules.styles.general_styles.
+FORBIDDEN: Business logic.
+ERRORS: None.
+
+Построение UI для отчета по командировке.
+"""
 
 from __future__ import annotations
 

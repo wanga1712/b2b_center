@@ -1,4 +1,10 @@
 """
+MODULE: scripts.verify_and_recalculate_statuses
+RESPONSIBILITY: Verifying current statuses and recalculating if necessary.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv, sys, time, loguru.
+FORBIDDEN: None.
+ERRORS: None.
+
 Проверка текущих статусов и пересчет при необходимости
 """
 

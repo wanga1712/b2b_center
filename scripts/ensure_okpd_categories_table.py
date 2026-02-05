@@ -1,4 +1,10 @@
 """
+MODULE: scripts.ensure_okpd_categories_table
+RESPONSIBILITY: Checking and creating okpd_categories table and category_id column.
+ALLOWED: sys, pathlib, loguru, config.settings, core.tender_database, core.exceptions.
+FORBIDDEN: None.
+ERRORS: None.
+
 Скрипт для проверки и создания таблицы okpd_categories и модификации okpd_from_users.
 
 Проверяет существование таблицы okpd_categories и поля category_id в okpd_from_users,

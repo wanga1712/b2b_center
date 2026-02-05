@@ -1,4 +1,10 @@
 """
+MODULE: modules.kp.formatters
+RESPONSIBILITY: Price and number formatting.
+ALLOWED: None (pure python).
+FORBIDDEN: External dependencies.
+ERRORS: None.
+
 Утилиты форматирования для модуля коммерческих предложений
 """
 

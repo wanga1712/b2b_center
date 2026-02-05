@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.match_finder
+RESPONSIBILITY: Search for product matches within documents using specified logic.
+ALLOWED: ExcelParser, DocumentParser, document_search_base, keyword_matcher, logging.
+FORBIDDEN: Direct database access.
+ERRORS: None.
+
 Модуль для поиска совпадений товаров в документах.
 
 Класс MatchFinder отвечает за:
@@ -27,15 +33,23 @@ from services.document_search.keyword_matcher import extract_keywords, check_key
 class MatchFinder:
     """Класс для поиска совпадений товаров в документах."""
 
-    def __init__(self, product_names: List[str], stop_phrases: Optional[List[str]] = None):
+    def __init__(
+        self,
+        product_names: List[str],
+        stop_phrases: Optional[List[str]] = None,
+        user_search_phrases: Optional[List[str]] = None,
+    ):
         """
         Args:
             product_names: Список названий товаров для поиска
             stop_phrases: Список стоп-фраз, при наличии которых ячейки/текст
                 должны игнорироваться при поиске (например, обобщающие описания).
+            user_search_phrases: Список пользовательских фраз для поиска по документации
+                (например, "инъектирование", "усиление"). Объединяются с дополнительными фразами.
         """
         self.product_names = product_names
         self.stop_phrases: List[str] = stop_phrases or []
+        self.user_search_phrases: List[str] = user_search_phrases or []
         self._product_patterns: Optional[Dict[str, Dict[str, Any]]] = None
         self._excel_parser = ExcelParser()
         self._document_parser = DocumentParser()
@@ -87,11 +101,28 @@ class MatchFinder:
     
     def search_additional_phrases(self, file_path: Path) -> List[Dict[str, Any]]:
         """Поиск дополнительных фраз в Excel файлах."""
-        return search_additional_phrases_in_excel(file_path, self._excel_parser)
+        # Используем фразы из additional_phrases.py (инъектирование, усиление и т.д.)
+        # Пользовательские фразы из БД пока не используются, все фразы в additional_phrases.py
+        from services.document_search.additional_phrases import get_additional_search_phrases
+        additional_phrases = get_additional_search_phrases()
+        # Если есть пользовательские фразы из БД, объединяем их
+        if self.user_search_phrases:
+            all_phrases = list(set(additional_phrases + self.user_search_phrases))
+        else:
+            all_phrases = additional_phrases
+        return search_additional_phrases_in_excel(file_path, self._excel_parser, custom_phrases=all_phrases)
     
     def search_additional_phrases_in_pdf(self, file_path: Path) -> List[Dict[str, Any]]:
         """Поиск дополнительных фраз в PDF файлах."""
-        return search_additional_phrases_in_pdf(file_path)
+        # Используем фразы из additional_phrases.py (инъектирование, усиление и т.д.)
+        from services.document_search.additional_phrases import get_additional_search_phrases
+        additional_phrases = get_additional_search_phrases()
+        # Если есть пользовательские фразы из БД, объединяем их
+        if self.user_search_phrases:
+            all_phrases = list(set(additional_phrases + self.user_search_phrases))
+        else:
+            all_phrases = additional_phrases
+        return search_additional_phrases_in_pdf(file_path, custom_phrases=all_phrases)
     
     def search_word_for_products(self, file_path: Path) -> List[Dict[str, Any]]:
         """Парсинг Word документа и поиск совпадений с названиями товаров по ключевым словам."""
@@ -122,10 +153,15 @@ class MatchFinder:
             
             from services.document_search.additional_phrases import get_additional_search_phrases
             additional_phrases = get_additional_search_phrases()
+            # Если есть пользовательские фразы из БД, объединяем их
+            if self.user_search_phrases:
+                all_phrases = list(set(additional_phrases + self.user_search_phrases))
+            else:
+                all_phrases = additional_phrases
             found_phrases = []
             
             text_lower = text.lower()
-            for phrase in additional_phrases:
+            for phrase in all_phrases:
                 if phrase.lower() in text_lower:
                     found_phrases.append({
                         "phrase": phrase,

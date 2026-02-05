@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.bids_tender_loader
+RESPONSIBILITY: Facade for TenderLoader to be used in bids widget.
+ALLOWED: typing, loguru, modules.bids.tender_loader, modules.bids.tender_list_widget.
+FORBIDDEN: Complex logic (delegate to TenderLoader).
+ERRORS: None.
+
 Модуль для загрузки тендеров в виджете закупок
 
 Содержит методы для загрузки различных типов тендеров (44ФЗ, 223ФЗ, новые, разыгранные)

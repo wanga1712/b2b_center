@@ -1,4 +1,10 @@
 """
+MODULE: scripts.test_excel_files
+RESPONSIBILITY: Testing opening of Excel files in a specified folder.
+ALLOWED: sys, pathlib, services.document_search.excel_parser, services.document_search.file_format_detector, traceback.
+FORBIDDEN: None.
+ERRORS: None.
+
 Скрипт для тестирования открытия Excel файлов в конкретной папке.
 """
 

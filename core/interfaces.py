@@ -1,4 +1,10 @@
 """
+MODULE: core.interfaces
+RESPONSIBILITY: Define Protocols and Abstract Base Classes for dependency injection.
+ALLOWED: Typing imports, ABC, Protocol.
+FORBIDDEN: Implementation details, concrete classes (except data structures).
+ERRORS: None.
+
 Интерфейсы (Protocol) для модульного проектирования
 
 Определяет контракты для взаимодействия между модулями,

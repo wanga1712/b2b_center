@@ -1,4 +1,10 @@
 """
+MODULE: modules.kp.product_editor
+RESPONSIBILITY: Handle product editing via dialogs and repo updates.
+ALLOWED: PyQt5, typing, loguru, modules.kp.*, modules.styles.*.
+FORBIDDEN: Direct SQL (uses repository abstraction).
+ERRORS: None.
+
 Редактирование товаров в каталоге
 """
 

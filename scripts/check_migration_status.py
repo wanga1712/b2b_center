@@ -1,4 +1,12 @@
-"""Проверка статуса миграции - сколько записей обработано"""
+"""
+MODULE: scripts.check_migration_status
+RESPONSIBILITY: Checking migration status and record counts.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv, traceback.
+FORBIDDEN: None.
+ERRORS: None.
+
+Проверка статуса миграции - сколько записей обработано
+"""
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os

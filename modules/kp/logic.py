@@ -1,4 +1,10 @@
 """
+MODULE: modules.kp.logic
+RESPONSIBILITY: Business logic for commercial proposals (calculations, dates).
+ALLOWED: math, datetime, typing, loguru.
+FORBIDDEN: Database queries, UI widgets.
+ERRORS: None.
+
 Бизнес-логика для модуля коммерческих предложений
 
 Содержит функции для:

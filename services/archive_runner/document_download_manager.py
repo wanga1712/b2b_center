@@ -1,4 +1,10 @@
 """
+MODULE: services.archive_runner.document_download_manager
+RESPONSIBILITY: Manage parallel downloading of tender documents.
+ALLOWED: DocumentDownloader, ThreadPoolExecutor, logging.
+FORBIDDEN: Processing/Extraction logic (delegate).
+ERRORS: None.
+
 Менеджер скачивания документов для тендеров.
 """
 

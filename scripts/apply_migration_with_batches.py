@@ -1,4 +1,10 @@
 """
+MODULE: scripts.apply_migration_with_batches
+RESPONSIBILITY: Batched migration application including data updates.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv, sys, time, loguru.
+FORBIDDEN: None.
+ERRORS: None.
+
 Миграция статусов закупок: структура + обновление данных батчами
 Начинает с последних записей, пропускает уже обработанные
 """

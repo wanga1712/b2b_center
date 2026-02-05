@@ -1,3 +1,11 @@
+"""
+MODULE: services.search_service
+RESPONSIBILITY: Search for commercial products in the database.
+ALLOWED: DatabaseManager, SQL queries.
+FORBIDDEN: Tender operations, external APIs.
+ERRORS: DatabaseQueryError.
+"""
+
 from typing import List, Optional, Dict, Any
 from core.database import DatabaseManager
 from core.models import Product, Manufacturer, Category, Subcategory

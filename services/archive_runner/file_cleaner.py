@@ -1,4 +1,10 @@
 """
+MODULE: services.archive_runner.file_cleaner
+RESPONSIBILITY: Cleanup temporary files (archives, processed Excel).
+ALLOWED: psutil, pathlib, logging, time.
+FORBIDDEN: Deleting critical data intentionally.
+ERRORS: None.
+
 Модуль для очистки файлов после обработки.
 
 Удаляет:
@@ -10,7 +16,7 @@
 import time
 import os
 from pathlib import Path
-from typing import Sequence, Optional, List
+from typing import Sequence, Optional, List, Dict, Any
 from loguru import logger
 
 try:
@@ -99,28 +105,51 @@ class FileCleaner:
         excel_paths: Sequence[Path],
         extraction_success: bool = True,
         db_save_success: bool = True,
+        failed_files: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
         """
-        Удаляет все файлы после обработки.
+        Удаляет все файлы после обработки, кроме проблемных.
         
         Args:
             archive_paths: Пути к архивным файлам
             excel_paths: Пути к Excel файлам
             extraction_success: Успешность распаковки
             db_save_success: Успешность записи в БД
+            failed_files: Список проблемных файлов, которые не нужно удалять
+                Каждый элемент: {"path": str, "error": str, ...}
             
         Note:
             Метод не бросает исключения - ошибки удаления файлов логируются,
             но не прерывают выполнение программы. Удаление выполняется быстро,
             если файл заблокирован - пропускается без долгого ожидания.
+            Проблемные файлы НЕ удаляются - они сохраняются для последующей обработки.
         """
+        # Формируем множество путей проблемных файлов для исключения из удаления
+        failed_paths = set()
+        if failed_files:
+            for failed_file in failed_files:
+                try:
+                    failed_paths.add(Path(failed_file["path"]).resolve())
+                except Exception:
+                    pass
+        
+        # Фильтруем архивы - исключаем проблемные файлы
+        archives_to_clean = [p for p in archive_paths if Path(p).resolve() not in failed_paths]
+        if failed_files and len(archives_to_clean) < len(archive_paths):
+            logger.info(f"⚠️ Сохраняем {len(archive_paths) - len(archives_to_clean)} проблемных архивных файлов")
+        
         try:
-            self.cleanup_archives_after_extraction(archive_paths, extraction_success)
+            self.cleanup_archives_after_extraction(archives_to_clean, extraction_success)
         except Exception as error:
             logger.warning(f"Ошибка при очистке архивов: {error}")
         
+        # Фильтруем Excel файлы - исключаем проблемные файлы
+        excel_to_clean = [p for p in excel_paths if Path(p).resolve() not in failed_paths]
+        if failed_files and len(excel_to_clean) < len(excel_paths):
+            logger.info(f"⚠️ Сохраняем {len(excel_paths) - len(excel_to_clean)} проблемных файлов для последующей обработки")
+        
         try:
-            self.cleanup_excel_after_save(excel_paths, db_save_success)
+            self.cleanup_excel_after_save(excel_to_clean, db_save_success)
         except Exception as error:
             logger.warning(f"Ошибка при очистке Excel файлов: {error}")
     
@@ -236,10 +265,33 @@ class FileCleaner:
             # Список процессов, которые могут держать файл
             processes_to_kill: List[psutil.Process] = []
             
-            for proc in psutil.process_iter():
+            # Используем более безопасный способ итерации по процессам
+            # с защитой от Access Violation
+            try:
+                process_list = list(psutil.process_iter(['pid', 'name']))
+            except Exception as e:
+                logger.warning(f"Не удалось получить список процессов: {e}")
+                return False
+            
+            for proc_info in process_list:
                 try:
-                    # Получаем открытые файлы процесса
-                    open_files = proc.open_files()
+                    # Получаем процесс по PID для безопасности
+                    proc = psutil.Process(proc_info.info['pid'])
+                    
+                    # Проверяем, что процесс еще существует
+                    if not proc.is_running():
+                        continue
+                    
+                    # Получаем открытые файлы процесса с защитой
+                    try:
+                        open_files = proc.open_files()
+                    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                        continue
+                    except Exception as e:
+                        # Игнорируем ошибки доступа к процессу
+                        logger.debug(f"Ошибка при получении открытых файлов процесса PID={proc_info.info['pid']}: {e}")
+                        continue
+                    
                     for file_info in open_files:
                         try:
                             file_path_to_check = str(Path(file_info.path).resolve()).lower()
@@ -250,25 +302,35 @@ class FileCleaner:
                                     f"PID={proc.pid}, Name={proc.name()}"
                                 )
                                 break  # Найден процесс, переходим к следующему
-                        except (OSError, ValueError):
+                        except (OSError, ValueError, AttributeError):
                             # Не удалось разрешить путь, пропускаем
                             continue
                 except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     # Процесс уже завершился или нет доступа
                     continue
                 except Exception as error:
-                    logger.debug(f"Ошибка при проверке процесса PID={proc.pid}: {error}")
+                    # Защита от любых других ошибок, включая Access Violation
+                    logger.debug(f"Ошибка при проверке процесса: {error}")
                     continue
             
             if not processes_to_kill:
                 logger.debug(f"Не найдено процессов, держащих файл {file_path.name}")
                 return False
             
-            # Завершаем найденные процессы
+            # Завершаем найденные процессы с защитой от Access Violation
             killed_count = 0
             for proc in processes_to_kill:
                 try:
-                    proc_name = proc.name()
+                    # Проверяем, что процесс еще существует
+                    if not proc.is_running():
+                        killed_count += 1
+                        continue
+                    
+                    try:
+                        proc_name = proc.name()
+                    except Exception:
+                        proc_name = "unknown"
+                    
                     proc_pid = proc.pid
                     
                     # Безопасные процессы для завершения (Excel, Word и т.д.)
@@ -295,33 +357,34 @@ class FileCleaner:
                         continue
                     
                     logger.info(f"Завершаю процесс {proc_name} (PID={proc_pid})...")
-                    proc.terminate()  # Сначала мягкое завершение
                     try:
-                        proc.wait(timeout=3)  # Ждем завершения до 3 секунд
-                        logger.info(f"Процесс {proc_name} (PID={proc_pid}) успешно завершен")
+                        proc.terminate()  # Сначала мягкое завершение
+                        try:
+                            proc.wait(timeout=3)  # Ждем завершения до 3 секунд
+                            logger.info(f"Процесс {proc_name} (PID={proc_pid}) успешно завершен")
+                            killed_count += 1
+                        except psutil.TimeoutExpired:
+                            # Если не завершился мягко, убиваем жестко
+                            logger.warning(
+                                f"Процесс {proc_name} (PID={proc_pid}) не завершился мягко. "
+                                f"Принудительное завершение..."
+                            )
+                            try:
+                                proc.kill()
+                                proc.wait(timeout=2)
+                                logger.info(f"Процесс {proc_name} (PID={proc_pid}) принудительно завершен")
+                                killed_count += 1
+                            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                # Процесс уже завершился или нет доступа
+                                killed_count += 1
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        # Процесс уже завершился или нет доступа
                         killed_count += 1
-                    except psutil.TimeoutExpired:
-                        # Если не завершился мягко, убиваем жестко
-                        logger.warning(
-                            f"Процесс {proc_name} (PID={proc_pid}) не завершился мягко. "
-                            f"Принудительное завершение..."
-                        )
-                        proc.kill()
-                        proc.wait(timeout=2)
-                        logger.info(f"Процесс {proc_name} (PID={proc_pid}) принудительно завершен")
-                        killed_count += 1
-                        
-                except psutil.NoSuchProcess:
-                    # Процесс уже завершился
-                    killed_count += 1
-                except psutil.AccessDenied:
-                    logger.warning(
-                        f"Нет прав для завершения процесса {proc_name} (PID={proc_pid})"
-                    )
                 except Exception as error:
-                    logger.error(
-                        f"Ошибка при завершении процесса {proc_name} (PID={proc_pid}): {error}"
-                    )
+                    # Защита от любых ошибок, включая Access Violation
+                    logger.warning(f"Ошибка при завершении процесса: {error}")
+                    # Продолжаем обработку следующих процессов
+                    continue
             
             return killed_count > 0
             

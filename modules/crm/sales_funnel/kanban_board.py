@@ -1,4 +1,10 @@
 """
+MODULE: modules.crm.sales_funnel.kanban_board
+RESPONSIBILITY: Kanban board UI widget displaying columns and cards.
+ALLOWED: PyQt5, loguru, modules.styles.general_styles, modules.crm.sales_funnel.kanban_column, modules.crm.sales_funnel.deal_card, modules.crm.sales_funnel.models.
+FORBIDDEN: Heavy business logic.
+ERRORS: None.
+
 Канбан-доска для воронок продаж
 """
 
@@ -100,6 +106,12 @@ class SalesFunnelKanbanBoard(QWidget):
         # Принудительно обновляем все счетчики после загрузки
         for column in self.columns:
             column.update_counter()
+    
+    def refresh_cards(self):
+        """Обновление карточек после синхронизации данных"""
+        for card in self.all_cards:
+            if hasattr(card, 'update_card_data'):
+                card.update_card_data()
     
     def on_deal_clicked(self, deal: Deal):
         """Обработка клика на карточку сделки"""

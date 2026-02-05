@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.xlsx_reader
+RESPONSIBILITY: Read .xlsx files (using openpyxl).
+ALLOWED: openpyxl, xlrd, pandas, file_format_detector, excel_utils, file_lock_handler, logging, core.exceptions.
+FORBIDDEN: Database access.
+ERRORS: DocumentSearchError.
+
 Чтение .xlsx файлов через openpyxl.
 """
 

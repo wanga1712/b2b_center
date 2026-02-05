@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.bids_tabs_manager
+RESPONSIBILITY: Manage tabs and feed updates in BidsWidget.
+ALLOWED: PyQt5, loguru, modules.bids.search_params_cache, modules.bids.tender_loader.
+FORBIDDEN: Direct SQL.
+ERRORS: None.
+
 Менеджер для управления вкладками и обновлениями в BidsWidget
 
 Отвечает за:

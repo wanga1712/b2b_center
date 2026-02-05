@@ -1,4 +1,10 @@
 """
+MODULE: scripts.clear_tender_match_data
+RESPONSIBILITY: Clearing tender match data tables.
+ALLOWED: sys, pathlib, loguru, config.settings, core.tender_database, core.exceptions, argparse.
+FORBIDDEN: None.
+ERRORS: None.
+
 Скрипт для очистки данных результатов поиска совпадений в документации торгов.
 
 Удаляет данные из таблиц:

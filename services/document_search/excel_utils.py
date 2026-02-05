@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.excel_utils
+RESPONSIBILITY: Utility functions for Excel data manipulation (column letters, formatting).
+ALLOWED: re.
+FORBIDDEN: Complex business logic, IO operations.
+ERRORS: None.
+
 Утилиты для работы с Excel файлами.
 """
 

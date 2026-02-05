@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.workbook_preparator
+RESPONSIBILITY: Prepare workbook paths, handling archives and multi-part files.
+ALLOWED: document_selector, archive_extractor, core.exceptions, logging.
+FORBIDDEN: Parsing cell data (only path preparation).
+ERRORS: DocumentSearchError.
+
 Модуль для подготовки путей к Excel файлам.
 """
 
@@ -74,22 +80,41 @@ class WorkbookPreparator:
                 first_path = group_paths[0]
                 suffix = first_path.suffix.lower()
                 
-                if suffix == ".rar":
-                    archive_path = first_path
-                    if len(group_paths) > 1:
-                        logger.info(
-                            "Обнаружен многочастный RAR (%s частей). Распаковываю, начиная с %s",
-                            len(group_paths),
-                            first_path.name,
+                # Проверяем, что все части архива существуют (для многотомных RAR)
+                if suffix == ".rar" and len(group_paths) > 1:
+                    # Проверяем наличие всех частей перед распаковкой
+                    missing_parts = []
+                    for part_path in group_paths:
+                        if not part_path.exists():
+                            missing_parts.append(part_path.name)
+                    
+                    if missing_parts:
+                        logger.warning(
+                            f"Не все части RAR архива скачаны. Отсутствуют: {', '.join(missing_parts)}. "
+                            f"Пропускаем распаковку до скачивания всех частей."
                         )
+                        continue
+                    
+                    archive_path = first_path
+                    logger.info(
+                        f"Обнаружен многочастный RAR ({len(group_paths)} частей). Все части скачаны. Распаковываю, начиная с {first_path.name}",
+                    )
+                elif suffix == ".rar":
+                    archive_path = first_path
                 else:
                     archive_path = (
                         self.extractor.combine_multi_part_archive(group_paths)
                         if len(group_paths) > 1
                         else first_path
                     )
-                extracted_paths = self.extractor.extract_archive(archive_path)
-                all_workbook_paths.extend(extracted_paths)
+                
+                try:
+                    extracted_paths = self.extractor.extract_archive(archive_path)
+                    all_workbook_paths.extend(extracted_paths)
+                except Exception as extract_error:
+                    logger.error(f"Ошибка при распаковке архива {archive_path.name}: {extract_error}")
+                    # Продолжаем обработку других архивов
+                    continue
         
         all_workbook_paths.extend(excel_paths)
         

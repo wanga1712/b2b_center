@@ -1,3 +1,10 @@
+"""
+MODULE: modules.bids.document_search_result_dialog
+RESPONSIBILITY: Dialog for displaying document search results.
+ALLOWED: PyQt5, loguru, typing, pathlib, modules.styles, services.archive_processing_service.
+FORBIDDEN: Direct DB Access.
+ERRORS: None.
+"""
 from __future__ import annotations
 
 from pathlib import Path

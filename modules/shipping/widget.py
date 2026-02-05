@@ -1,3 +1,11 @@
+"""
+MODULE: modules.shipping.widget
+RESPONSIBILITY: Shipping management UI widget.
+ALLOWED: PyQt5, modules.styles.general_styles.
+FORBIDDEN: Heavy business logic.
+ERRORS: None.
+"""
+
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QTextEdit
 from modules.styles.general_styles import apply_label_style
 

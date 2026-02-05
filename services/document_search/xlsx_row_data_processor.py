@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.xlsx_row_data_processor
+RESPONSIBILITY: Process extracted row values for .xlsx (helper for headers/columns).
+ALLOWED: openpyxl.utils.
+FORBIDDEN: IO operations.
+ERRORS: None.
+
 Обработка данных строк для .xlsx файлов.
 """
 

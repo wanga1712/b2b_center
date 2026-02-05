@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.document_parser
+RESPONSIBILITY: Unified interface for parsing different document types (Excel, Word, PDF).
+ALLOWED: ExcelParser, WordProcessor, PDFProcessor, logging.
+FORBIDDEN: Direct file parsing logic (delegate to specific parsers), network access.
+ERRORS: DocumentSearchError.
+
 Универсальный парсер для всех типов документов.
 
 Поддерживает:

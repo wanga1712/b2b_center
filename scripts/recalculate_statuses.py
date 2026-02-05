@@ -1,4 +1,10 @@
 """
+MODULE: scripts.recalculate_statuses
+RESPONSIBILITY: Recalculating tender statuses according to new rules.
+ALLOWED: psycopg2, os, dotenv, sys, time, loguru.
+FORBIDDEN: None.
+ERRORS: None.
+
 Пересчет статусов для всех записей в БД согласно новым правилам
 
 Правила присвоения статусов:

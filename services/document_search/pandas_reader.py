@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.pandas_reader
+RESPONSIBILITY: Fallback mechanism for reading Excel files using Pandas.
+ALLOWED: pandas, logging, excel_utils.
+FORBIDDEN: Database access.
+ERRORS: DocumentSearchError.
+
 Чтение Excel файлов через pandas с разными движками.
 """
 

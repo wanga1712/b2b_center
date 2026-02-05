@@ -1,4 +1,10 @@
 """
+MODULE: services.tender_repositories.feeds.feed_filters
+RESPONSIBILITY: Define data structures for feed filters.
+ALLOWED: dataclasses, typing.
+FORBIDDEN: Business logic, database operations.
+ERRORS: None.
+
 Модуль с фильтрами для загрузки тендеров.
 """
 

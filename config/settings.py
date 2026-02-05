@@ -1,3 +1,11 @@
+"""
+MODULE: config.settings
+RESPONSIBILITY: Application configuration loading and validation.
+ALLOWED: os, dotenv, dataclasses.
+FORBIDDEN: Complex business logic, database connections (only config).
+ERRORS: ValueError (validation).
+"""
+
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 import os
@@ -51,6 +59,22 @@ class AppConfig:
     log_retention: str
 
 
+@dataclass(frozen=True)
+class OpenRouterConfig:
+    """Конфигурация OpenRouter AI API"""
+    api_key: Optional[str]
+    api_url: str = "https://openrouter.ai/api/v1/chat/completions"
+
+
+@dataclass(frozen=True)
+class YandexDiskConfig:
+    """Конфигурация Яндекс Диска"""
+    token: Optional[str]
+    enabled: bool = False
+    base_path: str = "/tender_documents"
+    upload_after_download: bool = True
+
+
 class Config:
     """
     Главный класс конфигурации, загружающий все настройки из .env файла
@@ -69,6 +93,8 @@ class Config:
         self.delivery = self._load_delivery_config()
         self.ui = self._load_ui_config()
         self.app = self._load_app_config()
+        self.openrouter = self._load_openrouter_config()
+        self.yandex_disk = self._load_yandex_disk_config()
         # Пути к инструментам и директориям (настраиваются через .env)
         # По умолчанию используется домашняя директория пользователя
         default_download_dir = str(Path.home() / "Downloads" / "ЕИС_Документация")
@@ -79,17 +105,15 @@ class Config:
         self.business_trip_docs_dir = self._get_env_var("BUSINESS_TRIP_DOCS_DIR", None)
 
         self._configure_external_tools()
-        logger.info("Конфигурация успешно загружена")
+        # Конфигурация загружена успешно (без лога для уменьшения шума)
 
     def _load_environment(self, env_file: Optional[str]) -> None:
         """Загрузка переменных окружения"""
         try:
             if env_file and os.path.exists(env_file):
                 load_dotenv(env_file)
-                logger.info(f"Загружен .env файл: {env_file}")
             else:
                 load_dotenv()
-                logger.info("Загружен стандартный .env файл")
         except Exception as e:
             logger.warning(f"Не удалось загрузить .env файл: {e}")
 
@@ -208,6 +232,24 @@ class Config:
             log_retention=self._get_env_var("LOG_RETENTION", "30 days")
         )
 
+    def _load_openrouter_config(self) -> OpenRouterConfig:
+        """Загрузка конфигурации OpenRouter AI API"""
+        return OpenRouterConfig(
+            api_key=self._get_env_var("OPENROUTER_API_KEY", None),
+            api_url=self._get_env_var("OPENROUTER_API_URL", "https://openrouter.ai/api/v1/chat/completions")
+        )
+
+    def _load_yandex_disk_config(self) -> YandexDiskConfig:
+        """Загрузка конфигурации Яндекс Диска"""
+        token = self._get_env_var("YANDEX_DISK_TOKEN", None)
+        enabled = self._get_env_bool("YANDEX_DISK_ENABLED", False) if token else False
+        return YandexDiskConfig(
+            token=token,
+            enabled=enabled,
+            base_path=self._get_env_var("YANDEX_DISK_BASE_PATH", "/tender_documents"),
+            upload_after_download=self._get_env_bool("YANDEX_DISK_UPLOAD_AFTER_DOWNLOAD", True)
+        )
+
     def validate(self) -> bool:
         """
         Валидация конфигурации
@@ -272,4 +314,8 @@ class Config:
 
 
 # Создание глобального экземпляра конфигурации
-config = Config()
+try:
+    config = Config()
+except Exception as e:
+    print(f"CRITICAL ERROR during config initialization: {e}", file=__import__('sys').stderr)
+    __import__('sys').exit(1)

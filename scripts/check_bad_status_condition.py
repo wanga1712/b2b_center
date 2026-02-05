@@ -1,4 +1,12 @@
-"""Проверка условия для статуса 'Плохие'"""
+"""
+MODULE: scripts.check_bad_status_condition
+RESPONSIBILITY: Verifying logic conditions for 'Bad' status.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv.
+FORBIDDEN: None.
+ERRORS: None.
+
+Проверка условия для статуса 'Плохие'
+"""
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os

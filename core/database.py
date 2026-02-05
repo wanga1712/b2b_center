@@ -1,4 +1,10 @@
 """
+MODULE: core.database
+RESPONSIBILITY: Low-level PostgreSQL connection management (Singleton).
+ALLOWED: psycopg2, logging, connection pooling logic.
+FORBIDDEN: Business logic, specific tender operations (use repositories).
+ERRORS: DatabaseConnectionError, DatabaseQueryError.
+
 Менеджер базы данных с connection pooling и обработкой ошибок
 
 Модуль предоставляет:
@@ -158,10 +164,18 @@ class DatabaseManager:
             return False
 
     def close(self) -> None:
-        """Закрытие соединения с БД"""
-        if self.connection and not self.connection.closed:
-            self.connection.close()
-            logger.info("Соединение с БД закрыто")
+        """Закрытие соединения с БД с защитой от Access Violation"""
+        try:
+            if self.connection and not self.connection.closed:
+                try:
+                    self.connection.close()
+                    logger.info("Соединение с БД закрыто")
+                except Exception as close_error:
+                    logger.warning(f"Ошибка при закрытии соединения с БД: {close_error}")
+        except Exception as e:
+            logger.warning(f"Ошибка при проверке состояния соединения: {e}")
+        finally:
+            self.connection = None
 
     def __enter__(self):
         """Поддержка контекстного менеджера"""

@@ -1,4 +1,10 @@
 """
+MODULE: modules.crm.sales_funnel.deal_sync_service
+RESPONSIBILITY: Service to sync deal data with tender registry.
+ALLOWED: typing, datetime, loguru, psycopg2, modules.crm.sales_funnel.models, modules.crm.sales_funnel.deal_repository, services.tender_repository.
+FORBIDDEN: UI interaction.
+ERRORS: None.
+
 Сервис синхронизации данных сделок с реестром закупок
 """
 
@@ -8,7 +14,7 @@ from loguru import logger
 from psycopg2.extras import RealDictCursor
 from modules.crm.sales_funnel.models import Deal
 from modules.crm.sales_funnel.deal_repository import DealRepository
-from services.tender_repository import TenderRepository
+from services.tender_services.tender_repository_facade import TenderRepositoryFacade
 
 
 class DealSyncService:
@@ -17,7 +23,7 @@ class DealSyncService:
     def __init__(
         self,
         deal_repo: DealRepository,
-        tender_repo: TenderRepository
+        tender_repo: TenderRepositoryFacade
     ):
         self.deal_repo = deal_repo
         self.tender_repo = tender_repo
@@ -48,6 +54,38 @@ class DealSyncService:
                 logger.warning(f"Закупка {deal.tender_id} не найдена в реестре {registry_type}")
                 return False
             
+            # #region agent log
+            import json
+            import time
+            log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "sync",
+                        "hypothesisId": "SYNC1",
+                        "location": "deal_sync_service.py:sync_deal_with_tender",
+                        "message": "Tender data loaded",
+                        "data": {
+                            "deal_id": deal.id,
+                            "tender_id": deal.tender_id,
+                            "registry_type": registry_type,
+                            "tender_data_keys": list(tender_data.keys())[:30] if tender_data else [],
+                            "has_auction_name": "auction_name" in tender_data if tender_data else False,
+                            "auction_name": tender_data.get("auction_name")[:100] if tender_data and tender_data.get("auction_name") else None,
+                            "has_region_name": "region_name" in tender_data if tender_data else False,
+                            "region_name": tender_data.get("region_name"),
+                            "has_start_date": "start_date" in tender_data if tender_data else False,
+                            "has_end_date": "end_date" in tender_data if tender_data else False,
+                            "has_delivery_start_date": "delivery_start_date" in tender_data if tender_data else False,
+                            "has_delivery_end_date": "delivery_end_date" in tender_data if tender_data else False,
+                        },
+                        "timestamp": int(time.time() * 1000)
+                    }, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+            # #endregion
+            
             # Обновляем метаданные сделки актуальными данными
             updated_metadata = deal.metadata.copy() if deal.metadata else {}
             updated_metadata['original_data'] = tender_data
@@ -72,7 +110,33 @@ class DealSyncService:
             deal.description = self._generate_deal_description(tender_data, registry_type)
             
             # Сохраняем обновленную сделку
-            return self.deal_repo.update_deal(deal)
+            success = self.deal_repo.update_deal(deal)
+            
+            # #region agent log
+            import json
+            import time
+            log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "sync",
+                        "hypothesisId": "SYNC2",
+                        "location": "deal_sync_service.py:sync_deal_with_tender:after_update",
+                        "message": "After update_deal call",
+                        "data": {
+                            "deal_id": deal.id,
+                            "update_success": success,
+                            "metadata_has_original_data": "original_data" in (deal.metadata or {}),
+                            "original_data_keys_after": list(deal.metadata.get("original_data", {}).keys())[:20] if deal.metadata and deal.metadata.get("original_data") else [],
+                        },
+                        "timestamp": int(time.time() * 1000)
+                    }, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+            # #endregion
+            
+            return success
             
         except Exception as e:
             logger.error(f"Ошибка при синхронизации сделки {deal.id}: {e}", exc_info=True)
@@ -114,11 +178,12 @@ class DealSyncService:
             if registry_type == '44fz':
                 # Получаем из реестра 44ФЗ
                 query = """
-                    SELECT r.*, c.customer_full_name as customer_full_name, c.customer_short_name as customer_short_name,
+                    SELECT r.*, c.customer_full_name, c.customer_short_name,
                            cont.full_name as contractor_full_name, cont.short_name as contractor_short_name,
                            reg.name as region_name, okpd.main_code as okpd_main_code,
                            okpd.sub_code as okpd_sub_code, okpd.name as okpd_name,
-                           tp.trading_platform_name as platform_name
+                           tp.trading_platform_name as platform_name,
+                           r.delivery_region, r.delivery_address
                     FROM reestr_contract_44_fz r
                     LEFT JOIN customer c ON r.customer_id = c.id
                     LEFT JOIN region reg ON r.region_id = reg.id
@@ -129,11 +194,12 @@ class DealSyncService:
                 """
             else:  # 223fz
                 query = """
-                    SELECT r.*, c.customer_full_name as customer_full_name, c.customer_short_name as customer_short_name,
+                    SELECT r.*, c.customer_full_name, c.customer_short_name,
                            cont.full_name as contractor_full_name, cont.short_name as contractor_short_name,
                            reg.name as region_name, okpd.main_code as okpd_main_code,
                            okpd.sub_code as okpd_sub_code, okpd.name as okpd_name,
-                           tp.trading_platform_name as platform_name
+                           tp.trading_platform_name as platform_name,
+                           r.delivery_region, r.delivery_address
                     FROM reestr_contract_223_fz r
                     LEFT JOIN customer c ON r.customer_id = c.id
                     LEFT JOIN region reg ON r.region_id = reg.id
@@ -150,7 +216,31 @@ class DealSyncService:
             )
             
             if results:
-                return dict(results[0])
+                result = dict(results[0])
+                # #region agent log
+                import json
+                log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({
+                            "sessionId": "debug-session",
+                            "runId": "sync",
+                            "hypothesisId": "SQL_RESULT",
+                            "location": "deal_sync_service.py:_get_tender_data:after_query",
+                            "message": "SQL query result",
+                            "data": {
+                                "tender_id": tender_id,
+                                "registry_type": registry_type,
+                                "customer_field": result.get("customer"),
+                                "customer_full_name": result.get("customer_full_name"),
+                                "customer_short_name": result.get("customer_short_name"),
+                            },
+                            "timestamp": __import__('time').time_ns() // 1000000
+                        }) + "\n")
+                except:
+                    pass
+                # #endregion
+                return result
             return None
             
         except Exception as e:

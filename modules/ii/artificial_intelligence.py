@@ -1,5 +1,10 @@
-import logging
-from loguru import logger
+"""
+MODULE: modules.ii.artificial_intelligence
+RESPONSIBILITY: specialized AI chat dialogs and widgets.
+ALLOWED: logging, loguru, PyQt5, modules.styles.*.
+FORBIDDEN: Direct DB access (use services).
+ERRORS: None.
+"""
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QTextEdit,
     QPushButton, QLabel, QFrame, QScrollArea, QLineEdit,
@@ -16,6 +21,8 @@ from modules.styles.general_styles import (
 from modules.styles.ii_styles import (
     apply_chat_message_style, apply_chat_input_panel_style
 )
+
+from loguru import logger
 
 
 class AIChatDialog(QDialog):

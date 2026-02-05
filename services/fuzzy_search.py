@@ -1,4 +1,10 @@
 """
+MODULE: services.fuzzy_search
+RESPONSIBILITY: Fuzzy search for products using rapidfuzz or fallback.
+ALLOWED: rapidfuzz, fuzzywuzzy, difflib, logging.
+FORBIDDEN: Database connection (input is list of dicts).
+ERRORS: None.
+
 Сервис нечеткого поиска (fuzzy search) для обработки опечаток
 
 Использует библиотеку rapidfuzz для поиска товаров с учетом возможных опечаток

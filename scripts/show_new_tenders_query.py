@@ -1,4 +1,10 @@
 """
+MODULE: scripts.show_new_tenders_query
+RESPONSIBILITY: Displaying the SQL query used to fetch new tenders.
+ALLOWED: sys, pathlib, datetime, services.tender_repositories.tender_query_builder, services.tender_repositories.feeds.feed_filters, services.tender_repositories.feeds.new_tenders_service, core.tender_database, services.tender_repositories.tender_documents_repository, config.settings, loguru, services.tender_repository.
+FORBIDDEN: None.
+ERRORS: None.
+
 Скрипт для вывода SQL запроса для получения новых торгов.
 """
 
@@ -33,8 +39,8 @@ def show_query(user_id: int = 1, registry_type: str = "44fz", limit: int = 1000)
     service = NewTendersService(db_manager, documents_repo)
     
     # Получаем ОКПД коды пользователя
-    from services.tender_repository import TenderRepository
-    tender_repo = TenderRepository(db_manager)
+    from services.tender_services.tender_repository_facade import TenderRepositoryFacade
+    tender_repo = TenderRepositoryFacade(db_manager)
     user_okpd = tender_repo.get_user_okpd_codes(user_id)
     okpd_codes = [okpd.get('okpd_code') for okpd in user_okpd if okpd.get('okpd_code')]
     

@@ -1,11 +1,17 @@
 """
+MODULE: services.archive_runner.tender_prefetcher
+RESPONSIBILITY: Background downloading of tender documents to optimize throughput.
+ALLOWED: TenderFolderManager, DocumentSelector, DocumentDownloader, ThreadPoolExecutor, logging.
+FORBIDDEN: Heavy data processing (download only).
+ERRORS: None.
+
 Модуль для фоновой предзагрузки документов тендеров.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from concurrent.futures import ThreadPoolExecutor, Future, as_completed
+from concurrent.futures import ThreadPoolExecutor, Future, as_completed, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Any
 
@@ -85,11 +91,19 @@ class TenderPrefetcher:
             )
             return None
 
-        try:
-            result = future.result()
-        except Exception as error:
             tender_id = tender.get("id")
             registry_type = tender.get("registry_type", "44fz")
+        
+        try:
+            # Таймаут 120 секунд на получение результата prefetch
+            result = future.result(timeout=120)
+        except FuturesTimeoutError:
+            logger.warning(
+                f"Таймаут предзагрузки для торга {tender_id} ({registry_type}), работаем синхронно"
+            )
+            # Не отменяем future - пусть завершится в фоне
+            result = None
+        except Exception as error:
             logger.warning(
                 f"Фоновая загрузка для торга {tender_id} ({registry_type}) завершилась ошибкой: {error}"
             )
@@ -99,16 +113,26 @@ class TenderPrefetcher:
         return result
 
     def shutdown(self) -> None:
-        """Завершает пул потоков."""
+        """Завершает пул потоков с защитой от Access Violation."""
         try:
-            # Отменяем все незавершенные задачи
-            for future in self._futures.values():
-                if not future.done():
-                    future.cancel()
+            # Отменяем все незавершенные задачи с защитой
+            if hasattr(self, '_futures') and self._futures:
+                for future in list(self._futures.values()):  # Создаем копию списка для безопасности
+                    try:
+                        if not future.done():
+                            future.cancel()
+                    except Exception as cancel_error:
+                        logger.debug(f"Ошибка при отмене задачи: {cancel_error}")
+            
             # Закрываем executor с ожиданием завершения текущих задач
-            self.executor.shutdown(wait=True, timeout=30)
+            if hasattr(self, 'executor') and self.executor:
+                try:
+                    # Python 3.11/3.12: shutdown не принимает timeout
+                    self.executor.shutdown(wait=True)
+                except Exception as shutdown_error:
+                    logger.warning(f"Ошибка при закрытии executor: {shutdown_error}")
         except Exception as e:
-            logger.warning(f"Ошибка при закрытии префетчера: {e}")
+            logger.warning(f"Ошибка при закрытии префетчера: {e}", exc_info=True)
 
     def _submit_prefetch(self, index: int) -> None:
         if index >= len(self._tenders) or self._get_documents is None:
@@ -192,6 +216,26 @@ class TenderPrefetcher:
         records: List[Dict[str, Any]] = []
         if not unique_docs:
             return records
+
+        # #region agent log
+        import json
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        log_path = os.path.join(project_root, ".cursor", "debug.log")
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "transaction-debug",
+                    "hypothesisId": "PREFETCHER_IDLE",
+                    "location": "tender_prefetcher.py:_prefetch_documents:thread_pool_start",
+                    "message": "Запуск ThreadPoolExecutor для скачивания документов",
+                    "data": {"max_workers": min(self.max_prefetch, len(unique_docs)), "docs_count": len(unique_docs)},
+                    "timestamp": int(__import__('time').time() * 1000)
+                }) + "\n")
+        except Exception:
+            pass
+        # #endregion
 
         with ThreadPoolExecutor(max_workers=min(self.max_prefetch, len(unique_docs))) as executor:
             future_to_doc = {

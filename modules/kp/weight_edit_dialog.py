@@ -1,4 +1,10 @@
 """
+MODULE: modules.kp.weight_edit_dialog
+RESPONSIBILITY: Dialog for editing product weight.
+ALLOWED: PyQt5, modules.styles.*.
+FORBIDDEN: Heavy business logic.
+ERRORS: None.
+
 Диалог для редактирования веса товара
 """
 

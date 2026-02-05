@@ -1,4 +1,12 @@
-"""Модуль для группировки совпадений по цветам."""
+"""
+MODULE: modules.bids.tender_match_details_groups
+RESPONSIBILITY: Group match cards by confidence level (colors).
+ALLOWED: PyQt5, modules.styles.general_styles.
+FORBIDDEN: Business logic.
+ERRORS: None.
+
+Модуль для группировки совпадений по цветам.
+"""
 
 from typing import Any, Dict, List
 from PyQt5.QtWidgets import QLabel, QVBoxLayout

@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.xls_reader
+RESPONSIBILITY: Read .xls files (using xlrd or fallback).
+ALLOWED: xlrd, pandas, excel_utils, file_format_detector, logging, core.exceptions, file_lock_handler.
+FORBIDDEN: Database access.
+ERRORS: DocumentSearchError.
+
 Чтение .xls файлов через xlrd.
 """
 
@@ -131,11 +137,58 @@ def iter_xls_cells(
         f"Не удалось открыть файл {file_path.name} после всех попыток (попробовано {len(failed_attempts) + 1} методов, формат: {detected_format})"
     )
     
+    # Проверяем, не связана ли ошибка с отсутствием необходимых библиотек
+    missing_libs = []
+    if not XLRD_AVAILABLE:
+        missing_libs.append("xlrd==1.2.0")
+    try:
+        import python_calamine
+    except ImportError:
+        missing_libs.append("python-calamine")
+    
+    # Если файл определен как .xls, но xlrd не установлен - критическая ошибка
+    if detected_format == 'xls' and not XLRD_AVAILABLE:
+        error_msg = (
+            f"КРИТИЧЕСКАЯ ОШИБКА: Файл {file_path.name} имеет формат .xls, но xlrd не установлен. "
+            f"Для обработки старых .xls файлов требуется xlrd==1.2.0. "
+            f"Установите: pip install xlrd==1.2.0"
+        )
+        raise DocumentSearchError(error_msg)
+    
+    # Если файл поврежден и все библиотеки установлены - это поврежденный файл
+    if missing_libs:
+        error_msg = (
+            f"Не удалось открыть файл {file_path.name} ни одним из доступных методов. "
+            f"Определенный формат: {detected_format}. Попробовано методов: {len(failed_attempts) + 1}. "
+            f"КРИТИЧЕСКАЯ ОШИБКА: Не установлены необходимые библиотеки: {', '.join(missing_libs)}. "
+            f"Установите их командой: pip install {' '.join(missing_libs)}"
+        )
+        raise DocumentSearchError(error_msg)
+    
+    # Файл поврежден или имеет неподдерживаемый формат
     error_msg = (
         f"Не удалось открыть файл {file_path.name} ни одним из доступных методов. "
-        f"Определенный формат: {detected_format}. "
-        f"Попробовано методов: {len(failed_attempts) + 1}. "
-        f"Попробуйте установить xlrd==1.2.0 для поддержки старых .xls файлов."
+        f"Определенный формат: {detected_format}. Попробовано методов: {len(failed_attempts) + 1}. "
     )
+    
+    # Добавляем рекомендации в зависимости от формата
+    if detected_format == 'xls':
+        if XLRD_AVAILABLE and XLRD_VERSION:
+            error_msg += (
+                f"Файл поврежден или имеет неподдерживаемый формат. "
+                f"xlrd {XLRD_VERSION} установлен, но не может открыть файл. "
+                f"Рекомендуется установить python-calamine для лучшей поддержки поврежденных файлов: pip install python-calamine"
+            )
+        else:
+            error_msg += (
+                f"Для обработки старых .xls файлов требуется xlrd==1.2.0. "
+                f"Установите: pip install xlrd==1.2.0"
+            )
+    else:
+        error_msg += (
+            f"Файл поврежден или имеет неподдерживаемый формат. "
+            f"Рекомендуется установить python-calamine для лучшей поддержки: pip install python-calamine"
+        )
+    
     raise DocumentSearchError(error_msg)
 

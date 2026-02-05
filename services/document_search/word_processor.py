@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.word_processor
+RESPONSIBILITY: Extract text from Word documents (.docx, .doc).
+ALLOWED: docx, win32com, subprocess, logging, core.exceptions, file_lock_handler.
+FORBIDDEN: Direct database access.
+ERRORS: DocumentSearchError.
+
 Модуль для обработки Word документов (.docx, .doc).
 
 Поддерживает:

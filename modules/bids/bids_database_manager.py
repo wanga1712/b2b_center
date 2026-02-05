@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.bids_database_manager
+RESPONSIBILITY: Manage database connection/reconnection for the bids widget.
+ALLOWED: PyQt5.QtWidgets, loguru, core.tender_database, core.exceptions, modules.bids.settings_okpd_manager, modules.bids.settings_stop_words_manager, modules.bids.settings_categories_manager, modules.bids.search_params_cache, services.tender_repository, services.tender_match_repository.
+FORBIDDEN: Direct SQL queries (use repositories).
+ERRORS: None (handles exceptions internally).
+
 Модуль для управления подключением к БД в виджете закупок
 
 Содержит методы для переподключения к БД и восстановления данных
@@ -13,8 +19,8 @@ from modules.bids.settings_okpd_manager import OKPDManager
 from modules.bids.settings_stop_words_manager import StopWordsManager
 from modules.bids.settings_categories_manager import CategoriesManager
 from modules.bids.search_params_cache import SearchParamsCache
-from services.tender_repository import TenderRepository
-from services.tender_match_repository import TenderMatchRepository
+from services.tender_services.tender_repository_facade import TenderRepositoryFacade
+from services.match_services.tender_match_repository_facade import TenderMatchRepositoryFacade
 
 
 class BidsDatabaseManager:
@@ -27,8 +33,8 @@ class BidsDatabaseManager:
     def __init__(
         self,
         tender_db_manager: TenderDatabaseManager,
-        tender_repo: TenderRepository,
-        tender_match_repo: TenderMatchRepository,
+        tender_repo: TenderRepositoryFacade,
+        tender_match_repo: TenderMatchRepositoryFacade,
         user_id: int,
         search_params_cache: SearchParamsCache
     ):

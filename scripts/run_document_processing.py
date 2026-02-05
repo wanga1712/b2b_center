@@ -1,4 +1,10 @@
 """
+MODULE: scripts.run_document_processing
+RESPONSIBILITY: Running automated document processing (downloading, extracting, matching).
+ALLOWED: sys, argparse, pathlib, loguru, os, config.settings, core.database, core.tender_database, core.exceptions, services.archive_background_runner.
+FORBIDDEN: None.
+ERRORS: None.
+
 Скрипт для запуска автоматической обработки документов торгов.
 
 Выполняет полный цикл:
@@ -18,6 +24,9 @@ from pathlib import Path
 
 from loguru import logger
 
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.settings import config
 from core.database import DatabaseManager
 from core.tender_database import TenderDatabaseManager
@@ -132,12 +141,13 @@ def main():
     
     logger.info("🚀 Запуск автоматической обработки документов торгов")
     logger.info("="*80)
+    logger.info(f"Параметры: user_id={args.user_id}, registry_type={args.registry_type}, tender_type={args.tender_type}, specific_tenders={specific_tender_ids is not None}")
     
     # Проверка конфигурации
     if not config.tender_database:
         logger.error("❌ Конфигурация БД tender_monitor не задана в .env файле!")
         sys.exit(1)
-    
+
     if not config.database:
         logger.error("❌ Конфигурация БД product_catalog не задана в .env файле!")
         sys.exit(1)
@@ -160,62 +170,79 @@ def main():
         logger.error(f"❌ Ошибка подключения к БД product_catalog: {error}")
         tender_db_manager.disconnect()
         sys.exit(1)
+
+    # Создание runner
+    logger.info("Создание ArchiveBackgroundRunner...")
+    runner = ArchiveBackgroundRunner(
+        tender_db_manager=tender_db_manager,
+        product_db_manager=product_db_manager,
+        user_id=args.user_id,
+        max_workers=args.max_workers,
+        batch_size=args.batch_size,
+        batch_delay=args.batch_delay,
+    )
+    logger.info("ArchiveBackgroundRunner создан успешно")
+    # Если указан флаг --all-after-priority, сначала обрабатываем приоритетные, затем все остальные
+    if args.all_after_priority and specific_tender_ids:
+        logger.info("Режим 'все после приоритетных': сначала обрабатываем приоритетные закупки")
+        logger.info(f"Вызов runner.run() для приоритетных закупок: {len(specific_tender_ids)} закупок")
+        # Обрабатываем приоритетные
+        priority_stats = runner.run(specific_tender_ids=specific_tender_ids, registry_type=args.registry_type, tender_type=args.tender_type)
+        logger.info(f"Приоритетные закупки обработаны: {priority_stats.get('processed', 0)}/{priority_stats.get('total_tenders', 0)}")
+
+        # Теперь обрабатываем все остальные (без конкретных ID)
+        logger.info("Теперь обрабатываем все остальные закупки по настройкам пользователя")
+        logger.info("Вызов runner.run() для всех остальных закупок")
+        all_stats = runner.run(specific_tender_ids=None, registry_type=args.registry_type, tender_type=args.tender_type)
+
+        # Объединяем статистику
+        stats = {
+            "priority_processed": priority_stats.get('processed', 0),
+            "priority_total": priority_stats.get('total_tenders', 0),
+            "all_processed": all_stats.get('processed', 0),
+            "all_total": all_stats.get('total_tenders', 0),
+            "processed": priority_stats.get('processed', 0) + all_stats.get('processed', 0),
+            "total_tenders": priority_stats.get('total_tenders', 0) + all_stats.get('total_tenders', 0),
+            "errors": priority_stats.get('errors', 0) + all_stats.get('errors', 0),
+            "total_matches": priority_stats.get('total_matches', 0) + all_stats.get('total_matches', 0),
+        }
+    else:
+        # Обычный режим: либо конкретные закупки, либо все по настройкам
+        logger.info("Запуск обработки документов...")
+        if specific_tender_ids:
+            logger.info(f"Вызов runner.run() для конкретных закупок: {len(specific_tender_ids)} закупок")
+        else:
+            logger.info("Вызов runner.run() для всех закупок по настройкам пользователя")
+        stats = runner.run(specific_tender_ids=specific_tender_ids, registry_type=args.registry_type, tender_type=args.tender_type)
+        logger.info(f"runner.run() завершен. Статистика: {stats}")
+        
+    logger.info("\n✅ Обработка завершена успешно")
+    if args.all_after_priority and specific_tender_ids:
+        logger.info(f"Приоритетных торгов: {stats.get('priority_processed', 0)}/{stats.get('priority_total', 0)}")
+        logger.info(f"Остальных торгов: {stats.get('all_processed', 0)}/{stats.get('all_total', 0)}")
+        logger.info(f"Всего обработано: {stats.get('processed', 0)}/{stats.get('total_tenders', 0)}")
+    else:
+        logger.info(f"Обработано торгов: {stats.get('processed', 0)}/{stats.get('total_tenders', 0)}")
+
+
+    # Закрываем соединения с защитой от Access Violation
+    try:
+        if product_db_manager:
+            try:
+                product_db_manager.close()
+            except Exception as e:
+                logger.warning(f"Ошибка при закрытии соединения с product_catalog: {e}")
+    except Exception as e:
+        logger.warning(f"Ошибка при работе с product_db_manager: {e}")
     
     try:
-        # Создаем обработчик с настраиваемым количеством потоков
-        runner = ArchiveBackgroundRunner(
-            tender_db_manager=tender_db_manager,
-            product_db_manager=product_db_manager,
-            user_id=args.user_id,
-            max_workers=args.max_workers,
-            batch_size=args.batch_size,
-            batch_delay=args.batch_delay,
-        )
-        
-        # Если указан флаг --all-after-priority, сначала обрабатываем приоритетные, затем все остальные
-        if args.all_after_priority and specific_tender_ids:
-            logger.info("Режим 'все после приоритетных': сначала обрабатываем приоритетные закупки")
-            # Обрабатываем приоритетные
-            priority_stats = runner.run(specific_tender_ids=specific_tender_ids, registry_type=args.registry_type, tender_type=args.tender_type)
-            logger.info(f"Приоритетные закупки обработаны: {priority_stats.get('processed', 0)}/{priority_stats.get('total_tenders', 0)}")
-            
-            # Теперь обрабатываем все остальные (без конкретных ID)
-            logger.info("Теперь обрабатываем все остальные закупки по настройкам пользователя")
-            all_stats = runner.run(specific_tender_ids=None, registry_type=args.registry_type, tender_type=args.tender_type)
-            
-            # Объединяем статистику
-            stats = {
-                "priority_processed": priority_stats.get('processed', 0),
-                "priority_total": priority_stats.get('total_tenders', 0),
-                "all_processed": all_stats.get('processed', 0),
-                "all_total": all_stats.get('total_tenders', 0),
-                "processed": priority_stats.get('processed', 0) + all_stats.get('processed', 0),
-                "total_tenders": priority_stats.get('total_tenders', 0) + all_stats.get('total_tenders', 0),
-                "errors": priority_stats.get('errors', 0) + all_stats.get('errors', 0),
-                "total_matches": priority_stats.get('total_matches', 0) + all_stats.get('total_matches', 0),
-            }
-        else:
-            # Обычный режим: либо конкретные закупки, либо все по настройкам
-            stats = runner.run(specific_tender_ids=specific_tender_ids, registry_type=args.registry_type, tender_type=args.tender_type)
-        
-        logger.info("\n✅ Обработка завершена успешно")
-        if args.all_after_priority and specific_tender_ids:
-            logger.info(f"Приоритетных торгов: {stats.get('priority_processed', 0)}/{stats.get('priority_total', 0)}")
-            logger.info(f"Остальных торгов: {stats.get('all_processed', 0)}/{stats.get('all_total', 0)}")
-            logger.info(f"Всего обработано: {stats.get('processed', 0)}/{stats.get('total_tenders', 0)}")
-        else:
-            logger.info(f"Обработано торгов: {stats.get('processed', 0)}/{stats.get('total_tenders', 0)}")
-        
+        if tender_db_manager:
+            try:
+                tender_db_manager.disconnect()
+            except Exception as e:
+                logger.warning(f"Ошибка при закрытии соединения с tender_monitor: {e}")
     except Exception as e:
-        logger.exception(f"❌ Критическая ошибка при обработке: {e}")
-        sys.exit(1)
-    finally:
-        # Закрываем соединения
-        try:
-            product_db_manager.close()
-            tender_db_manager.disconnect()
-        except:
-            pass
+        logger.warning(f"Ошибка при работе с tender_db_manager: {e}")
 
 
 if __name__ == "__main__":

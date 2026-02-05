@@ -1,4 +1,10 @@
 """
+MODULE: core.models
+RESPONSIBILITY: Define domain data structures (dataclasses, enums).
+ALLOWED: Dataclasses, Enums, Typing.
+FORBIDDEN: Business logic, database operations.
+ERRORS: None.
+
 Модели данных для CRM системы B2B AutoDesk
 
 Модуль содержит dataclass модели для представления сущностей системы:

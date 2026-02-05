@@ -1,4 +1,10 @@
 """
+MODULE: modules.crm.sales_funnel.pipeline_repository
+RESPONSIBILITY: Repository for pipeline stages and configuration.
+ALLOWED: typing, loguru, core.tender_database, psycopg2, modules.crm.sales_funnel.models.
+FORBIDDEN: UI interaction.
+ERRORS: None.
+
 Репозиторий для работы с воронками продаж в БД
 """
 

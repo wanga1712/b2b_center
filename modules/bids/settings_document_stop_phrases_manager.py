@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.settings_document_stop_phrases_manager
+RESPONSIBILITY: Manage document stop phrases in the settings UI.
+ALLOWED: re, typing, PyQt5.QtWidgets, loguru, services.tender_repository.
+FORBIDDEN: Direct SQL queries (use TenderRepository).
+ERRORS: None.
+
 Модуль для управления стоп-фразами анализа документации в настройках.
 """
 
@@ -8,13 +14,13 @@ from typing import List
 from PyQt5.QtWidgets import QMessageBox
 from loguru import logger
 
-from services.tender_repository import TenderRepository
+from services.tender_services.tender_repository_facade import TenderRepositoryFacade
 
 
 class DocumentStopPhrasesManager:
     """Класс для управления стоп-фразами анализа документации."""
 
-    def __init__(self, tender_repo: TenderRepository, user_id: int):
+    def __init__(self, tender_repo: TenderRepositoryFacade, user_id: int):
         """
         Инициализация менеджера стоп-фраз.
 

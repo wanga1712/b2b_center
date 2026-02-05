@@ -1,4 +1,12 @@
-"""Исправление записей со статусом 'Плохие', которые должны быть 'Работа комиссии'"""
+"""
+MODULE: scripts.fix_commission_status
+RESPONSIBILITY: Fixing records with 'Bad' status that should be 'Commission Work'.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv, sys, time, traceback.
+FORBIDDEN: None.
+ERRORS: None.
+
+Исправление записей со статусом 'Плохие', которые должны быть 'Работа комиссии'
+"""
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os

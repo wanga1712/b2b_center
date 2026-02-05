@@ -1,4 +1,10 @@
 """
+MODULE: core.exceptions
+RESPONSIBILITY: Define core-specific exception classes.
+ALLOWED: Inheriting from AppError or CommercialAppError.
+FORBIDDEN: Business logic.
+ERRORS: None.
+
 Пользовательские исключения приложения
 """
 

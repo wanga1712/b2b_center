@@ -1,4 +1,12 @@
-"""Модуль для создания UI элементов диалога деталей закупки."""
+"""
+MODULE: modules.bids.tender_detail_dialog_ui
+RESPONSIBILITY: Create UI elements for detail dialog.
+ALLOWED: PyQt5, modules.styles.*, modules.bids.tender_card_utils.
+FORBIDDEN: Business logic.
+ERRORS: None.
+
+Модуль для создания UI элементов диалога деталей закупки.
+"""
 
 from typing import Any, Dict, List
 from PyQt5.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QWidget

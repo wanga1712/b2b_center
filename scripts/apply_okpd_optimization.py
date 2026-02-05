@@ -1,4 +1,10 @@
 """
+MODULE: scripts.apply_okpd_optimization
+RESPONSIBILITY: Applying OKPD optimization indexes.
+ALLOWED: sys, pathlib, config.settings, core.tender_database, loguru.
+FORBIDDEN: None.
+ERRORS: None.
+
 Скрипт для применения оптимизации индексов для ОКПД и тендеров.
 """
 

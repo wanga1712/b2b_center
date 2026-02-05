@@ -1,4 +1,10 @@
 """
+MODULE: core.dependency_injection
+RESPONSIBILITY: Central Dependency Injection Container (Singleton).
+ALLOWED: Importing all services and repositories.
+FORBIDDEN: Business logic.
+ERRORS: None.
+
 Контейнер зависимостей для внедрения зависимостей (Dependency Injection)
 
 Обеспечивает централизованное создание и управление зависимостями,
@@ -10,9 +16,9 @@ from loguru import logger
 
 from core.tender_database import TenderDatabaseManager
 from core.database import DatabaseManager
-from services.tender_repository import TenderRepository
-from services.tender_match_repository import TenderMatchRepository
+from services.tender_services.tender_repository_facade import TenderRepositoryFacade
 from services.document_search_service import DocumentSearchService
+from services.match_services.tender_match_repository_facade import TenderMatchRepositoryFacade
 from config.settings import config
 
 
@@ -39,8 +45,9 @@ class DependencyContainer:
         self._initialized = True
         self._tender_db_manager: Optional[TenderDatabaseManager] = None
         self._commercial_db_manager: Optional[DatabaseManager] = None
-        self._tender_repository: Optional[TenderRepository] = None
-        self._tender_match_repository: Optional[TenderMatchRepository] = None
+        self._tender_repository: Optional[TenderRepositoryFacade] = None
+        self._tender_match_repository: Optional[TenderMatchRepositoryFacade] = None
+        self._tender_match_repository_facade: Optional[TenderMatchRepositoryFacade] = None
         self._document_search_service: Optional[DocumentSearchService] = None
     
     def get_tender_database_manager(self) -> TenderDatabaseManager:
@@ -59,21 +66,29 @@ class DependencyContainer:
             self._commercial_db_manager.connect()
         return self._commercial_db_manager
     
-    def get_tender_repository(self) -> TenderRepository:
+    def get_tender_repository(self) -> TenderRepositoryFacade:
         """Получение репозитория торгов"""
         if self._tender_repository is None:
-            logger.info("Создание TenderRepository")
+            logger.info("Создание TenderRepositoryFacade")
             db_manager = self.get_tender_database_manager()
-            self._tender_repository = TenderRepository(db_manager)
+            self._tender_repository = TenderRepositoryFacade(db_manager)
         return self._tender_repository
     
-    def get_tender_match_repository(self) -> TenderMatchRepository:
-        """Получение репозитория результатов поиска"""
+    def get_tender_match_repository(self) -> TenderMatchRepositoryFacade:
+        """Получение репозитория соответствий торгов"""
         if self._tender_match_repository is None:
-            logger.info("Создание TenderMatchRepository")
+            logger.info("Создание TenderMatchRepositoryFacade")
             db_manager = self.get_tender_database_manager()
-            self._tender_match_repository = TenderMatchRepository(db_manager)
+            self._tender_match_repository = TenderMatchRepositoryFacade(db_manager)
         return self._tender_match_repository
+    
+    def get_tender_match_repository_facade(self) -> TenderMatchRepositoryFacade:
+        """Получение фасада репозитория результатов поиска"""
+        if self._tender_match_repository_facade is None:
+            logger.info("Создание TenderMatchRepositoryFacade")
+            db_manager = self.get_tender_database_manager()
+            self._tender_match_repository_facade = TenderMatchRepositoryFacade(db_manager)
+        return self._tender_match_repository_facade
     
     def get_document_search_service(self) -> DocumentSearchService:
         """Получение сервиса поиска документов"""
@@ -106,6 +121,7 @@ class DependencyContainer:
         
         self._tender_repository = None
         self._tender_match_repository = None
+        self._tender_match_repository_facade = None
         self._document_search_service = None
 
 

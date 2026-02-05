@@ -1,4 +1,10 @@
 """
+MODULE: scripts.analyze_tender_db
+RESPONSIBILITY: Analyzing tender database structure and content.
+ALLOWED: psycopg2, os, dotenv, typing, json, datetime.
+FORBIDDEN: None.
+ERRORS: None.
+
 Скрипт для анализа структуры базы данных tender_monitor
 
 Анализирует:

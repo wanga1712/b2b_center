@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.pdf_search
+RESPONSIBILITY: Search for product matches within PDF files.
+ALLOWED: pdf_processor, additional_phrases, logging, time, gc.
+FORBIDDEN: Direct database access.
+ERRORS: None.
+
 Модуль для поиска совпадений в PDF файлах.
 
 Содержит методы поиска товаров и дополнительных фраз в PDF документах.
@@ -7,7 +13,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import time
 import gc
 
@@ -121,17 +127,21 @@ def search_pdf_for_products(
     return sorted_matches[:50]
 
 
-def search_additional_phrases_in_pdf(file_path: Path) -> List[Dict[str, Any]]:
+def search_additional_phrases_in_pdf(file_path: Path, custom_phrases: Optional[List[str]] = None) -> List[Dict[str, Any]]:
     """
     Поиск дополнительных фраз в PDF файлах.
     
     Args:
         file_path: Путь к PDF файлу
+        custom_phrases: Пользовательские фразы для поиска (объединяются с дополнительными)
         
     Returns:
         Список найденных совпадений с дополнительными фразами
     """
-    phrases = get_additional_search_phrases()
+    if custom_phrases:
+        phrases = custom_phrases
+    else:
+        phrases = get_additional_search_phrases()
     if not phrases:
         return []
     

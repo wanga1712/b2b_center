@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.match_aggregator
+RESPONSIBILITY: Aggregate match results from multiple sources/files.
+ALLOWED: MatchFinder, logging.
+FORBIDDEN: Direct parsing logic (delegate to MatchFinder).
+ERRORS: None.
+
 Модуль для агрегации совпадений из Excel файлов.
 """
 

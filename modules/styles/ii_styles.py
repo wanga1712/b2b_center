@@ -1,4 +1,10 @@
 """
+MODULE: modules.styles.ii_styles
+RESPONSIBILITY: Styles for AI chat module.
+ALLOWED: modules.styles.general_styles.
+FORBIDDEN: Business logic.
+ERRORS: None.
+
 Стили для модуля искусственного интеллекта (чат).
 """
 

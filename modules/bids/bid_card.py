@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.bid_card
+RESPONSIBILITY: Display individual bid card in Kanban board.
+ALLOWED: PyQt5, list, dict, loguru.
+FORBIDDEN: Database queries.
+ERRORS: None.
+
 Карточка закупки для канбан-доски
 
 Представляет отдельную заявку/закупку с возможностью

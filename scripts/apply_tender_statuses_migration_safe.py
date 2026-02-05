@@ -1,4 +1,10 @@
 """
+MODULE: scripts.apply_tender_statuses_migration_safe
+RESPONSIBILITY: Safe application of tender statuses migration with detailed logging.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv, pathlib, loguru, time.
+FORBIDDEN: None.
+ERRORS: None.
+
 Безопасная миграция статусов закупок с батчами и подробным логированием
 
 Выполняет миграцию по шагам:

@@ -1,31 +1,29 @@
 """
+MODULE: modules.bids.tender_loader
+RESPONSIBILITY: Load tender data from repositories and update UI widgets.
+ALLOWED: typing, loguru, PyQt5.QtWidgets, modules.bids.tender_list_widget, modules.bids.tender_loader_base, modules.bids.search_params_cache, services.tender_repository, services.document_search_service.
+FORBIDDEN: Direct SQL queries (use TenderRepository).
+ERRORS: None (handles exceptions).
+
 Модуль для загрузки данных о тендерах из репозитория.
 """
 
 from typing import Optional
 from loguru import logger
 from PyQt5.QtWidgets import QMessageBox
-import json
-from pathlib import Path
-from datetime import datetime
 
 from modules.bids.tender_list_widget import TenderListWidget
 from modules.bids.tender_loader_base import TenderLoaderBase
 from modules.bids.search_params_cache import SearchParamsCache
-from services.tender_repository import TenderRepository
+from services.tender_services.tender_repository_facade import TenderRepositoryFacade
 from services.document_search_service import DocumentSearchService
-
-# #region agent log
-DEBUG_LOG_PATH = Path(__file__).parent.parent.parent / ".cursor" / "debug.log"
-# #endregion
-
 
 class TenderLoader(TenderLoaderBase):
     """Класс для загрузки тендеров различных типов"""
     
     def __init__(
         self,
-        tender_repo: TenderRepository,
+        tender_repo: TenderRepositoryFacade,
         document_search_service: Optional[DocumentSearchService] = None,
         cache: Optional[SearchParamsCache] = None,
     ):
@@ -59,8 +57,49 @@ class TenderLoader(TenderLoaderBase):
         
         # Проверяем кэш (только если не принудительное обновление)
         cached_data = None
+        # #region agent log
+        import json
+        import time
+        log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "I",
+                    "location": "tender_loader.py:load_tenders_44fz:check_cache",
+                    "message": "Проверка кэша для 44ФЗ",
+                    "data": {
+                        "force": force,
+                        "has_cache": self.cache is not None,
+                        "user_id": user_id,
+                        "filters": filters
+                    },
+                    "timestamp": int(time.time() * 1000)
+                }, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
         if not force and self.cache:
             cached_data = self.cache.get_tenders('44fz', 'new', user_id, filters)
+            # #region agent log
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "I",
+                        "location": "tender_loader.py:load_tenders_44fz:cache_result",
+                        "message": "Результат проверки кэша для 44ФЗ",
+                        "data": {
+                            "cached_data_exists": cached_data is not None,
+                            "cached_count": len(cached_data['tenders']) if cached_data else 0
+                        },
+                        "timestamp": int(time.time() * 1000)
+                    }, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+            # #endregion
             if cached_data:
                 logger.info(f"Используем кэш: {len(cached_data['tenders'])} закупок 44ФЗ (новые)")
                 widget.set_tenders(cached_data['tenders'], cached_data.get('total_count'))
@@ -92,37 +131,33 @@ class TenderLoader(TenderLoaderBase):
                 category_id=filters['category_id'],
                 limit=1000
             )
+            # #region agent log
+            import json
+            import time
+            log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "G",
+                        "location": "tender_loader.py:load_tenders_44fz:after_fetch",
+                        "message": "Получены закупки из репозитория (после SQL фильтрации)",
+                        "data": {
+                            "count_before_process": len(tenders) if tenders else 0,
+                            "user_id": user_id,
+                            "region_id": filters['region_id'],
+                            "category_id": filters['category_id']
+                        },
+                        "timestamp": int(time.time() * 1000)
+                    }, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+            # #endregion
             tenders, total_count = self._process_tenders_result(tenders)
             
             logger.info(f"Отображаем закупки 44ФЗ: {len(tenders)} (всего в БД: {total_count})")
             logger.info(f"Применены фильтры: категория={filters['category_id']}, регион={filters['region_id']}, стоп-слов={len(filters['user_stop_words'])}")
-            
-            # #region agent log
-            try:
-                tender_ids = [t.get('id') for t in tenders if t.get('id')]
-                log_entry = {
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "E",
-                    "location": f"{__file__}:88",
-                    "message": "load_new_tenders_44fz: торги после SQL фильтрации",
-                    "data": {
-                        "tender_ids": tender_ids[:20],  # Первые 20 для логирования
-                        "total_tenders_count": len(tenders),
-                        "total_count_in_db": total_count,
-                        "filters_applied": {
-                            "category_id": filters.get('category_id'),
-                            "region_id": filters.get('region_id'),
-                            "stop_words_count": len(filters.get('user_stop_words', []))
-                        }
-                    },
-                    "timestamp": int(datetime.now().timestamp() * 1000)
-                }
-                with open(DEBUG_LOG_PATH, 'a', encoding='utf-8') as f:
-                    f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
-            except Exception as e:
-                pass
-            # #endregion
             
             # Сохраняем в кэш
             if self.cache:
@@ -130,6 +165,24 @@ class TenderLoader(TenderLoaderBase):
             
             # Используем единый метод для загрузки и обновления
             # SQL уже отфильтровал неинтересные торги (is_interesting = FALSE)
+            # #region agent log
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "G",
+                        "location": "tender_loader.py:load_tenders_44fz:before_set_tenders",
+                        "message": "Передача закупок в виджет",
+                        "data": {
+                            "count": len(tenders) if tenders else 0,
+                            "total_count": total_count
+                        },
+                        "timestamp": int(time.time() * 1000)
+                    }, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+            # #endregion
             widget.set_tenders(tenders, total_count)
             
             if self.document_search_service:
@@ -158,8 +211,49 @@ class TenderLoader(TenderLoaderBase):
         
         # Проверяем кэш (только если не принудительное обновление)
         cached_data = None
+        # #region agent log
+        import json
+        import time
+        log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "I",
+                    "location": "tender_loader.py:load_tenders_223fz:check_cache",
+                    "message": "Проверка кэша для 223ФЗ",
+                    "data": {
+                        "force": force,
+                        "has_cache": self.cache is not None,
+                        "user_id": user_id,
+                        "filters": filters
+                    },
+                    "timestamp": int(time.time() * 1000)
+                }, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
         if not force and self.cache:
             cached_data = self.cache.get_tenders('223fz', 'new', user_id, filters)
+            # #region agent log
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "I",
+                        "location": "tender_loader.py:load_tenders_223fz:cache_result",
+                        "message": "Результат проверки кэша для 223ФЗ",
+                        "data": {
+                            "cached_data_exists": cached_data is not None,
+                            "cached_count": len(cached_data['tenders']) if cached_data else 0
+                        },
+                        "timestamp": int(time.time() * 1000)
+                    }, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+            # #endregion
             if cached_data:
                 logger.info(f"Используем кэш: {len(cached_data['tenders'])} закупок 223ФЗ (новые)")
                 widget.set_tenders(cached_data['tenders'], cached_data.get('total_count'))
@@ -183,6 +277,27 @@ class TenderLoader(TenderLoaderBase):
             return
         
         try:
+            # #region agent log
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "J",
+                        "location": "tender_loader.py:load_tenders_223fz:before_fetch",
+                        "message": "Перед запросом 223ФЗ из БД",
+                        "data": {
+                            "user_id": user_id,
+                            "okpd_codes_count": len(filters['user_okpd_codes']) if filters['user_okpd_codes'] else 0,
+                            "stop_words_count": len(filters['user_stop_words']) if filters['user_stop_words'] else 0,
+                            "region_id": filters['region_id'],
+                            "category_id": filters['category_id']
+                        },
+                        "timestamp": int(time.time() * 1000)
+                    }, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+            # #endregion
             tenders = self.tender_repo.get_new_tenders_223fz(
                 user_id=user_id,
                 user_okpd_codes=filters['user_okpd_codes'],
@@ -191,6 +306,23 @@ class TenderLoader(TenderLoaderBase):
                 category_id=filters['category_id'],
                 limit=1000
             )
+            # #region agent log
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "J",
+                        "location": "tender_loader.py:load_tenders_223fz:after_fetch",
+                        "message": "После запроса 223ФЗ из БД",
+                        "data": {
+                            "tenders_count": len(tenders) if tenders else 0
+                        },
+                        "timestamp": int(time.time() * 1000)
+                    }, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+            # #endregion
             tenders, total_count = self._process_tenders_result(tenders)
             
             logger.info(f"Отображаем закупки 223ФЗ: {len(tenders)} (всего в БД: {total_count})")

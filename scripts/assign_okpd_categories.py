@@ -1,4 +1,10 @@
 """
+MODULE: scripts.assign_okpd_categories
+RESPONSIBILITY: Mass assignment of OKPD categories based on rules.
+ALLOWED: sys, pathlib, loguru, config.settings, core.tender_database, core.exceptions.
+FORBIDDEN: None.
+ERRORS: None.
+
 Скрипт для массового присвоения категорий существующим ОКПД кодам пользователя.
 
 Правила присвоения:

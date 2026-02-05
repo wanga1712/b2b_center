@@ -1,4 +1,10 @@
 """
+MODULE: services.tender_repositories.document_stop_phrases_repository
+RESPONSIBILITY: Manage document analysis stop phrases in DB.
+ALLOWED: typing, loguru, psycopg2.extras, core.tender_database.
+FORBIDDEN: Business logic outside DB operations.
+ERRORS: Database exceptions.
+
 Репозиторий для работы со стоп-фразами анализа документации.
 """
 

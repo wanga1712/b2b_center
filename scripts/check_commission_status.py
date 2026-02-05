@@ -1,4 +1,12 @@
-"""Проверка записей для статуса 'Работа комиссии'"""
+"""
+MODULE: scripts.check_commission_status
+RESPONSIBILITY: Checking records for 'Commission Work' status.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv.
+FORBIDDEN: None.
+ERRORS: None.
+
+Проверка записей для статуса 'Работа комиссии'
+"""
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os

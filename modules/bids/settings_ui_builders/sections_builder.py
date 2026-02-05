@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.settings_ui_builders.sections_builder
+RESPONSIBILITY: UI Builder for settings sections (Filters, OKPD, Categories).
+ALLOWED: PyQt5, modules.bids.salesforce_settings_ui, modules.styles.general_styles.
+FORBIDDEN: Business logic, Direct DB access.
+ERRORS: None.
+
 UI билдер для всех секций настроек закупок.
 
 Создает секции: фильтр категорий, ОКПД, категории, стоп-слова, документ стоп-фразы, кнопка показа.

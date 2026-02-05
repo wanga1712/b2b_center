@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.excel_parser
+RESPONSIBILITY: Facade for parsing Excel files (xls/xlsx).
+ALLOWED: xlsx_reader, xls_reader, pandas_reader, file_format_detector, row_extractor, logging.
+FORBIDDEN: Direct database access.
+ERRORS: DocumentSearchError.
+
 Фасад для парсинга Excel файлов.
 
 Класс ExcelParser делегирует работу специализированным модулям:

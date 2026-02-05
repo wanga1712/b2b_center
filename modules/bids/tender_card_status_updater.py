@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.tender_card_status_updater
+RESPONSIBILITY: Logic for updating status badges on tender cards.
+ALLOWED: PyQt5, loguru.
+FORBIDDEN: Direct DB queries.
+ERRORS: None.
+
 Модуль для обновления статуса карточки закупки.
 """
 

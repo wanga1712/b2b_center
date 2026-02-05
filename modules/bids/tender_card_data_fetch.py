@@ -1,9 +1,17 @@
-"""Модуль для получения данных совпадений для карточки закупки."""
+"""
+MODULE: modules.bids.tender_card_data_fetch
+RESPONSIBILITY: Fetch match summary and details for tender cards.
+ALLOWED: typing, services.tender_match_repository.
+FORBIDDEN: UI code (pure data fetching).
+ERRORS: None.
+
+Модуль для получения данных совпадений для карточки закупки.
+"""
 
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from services.tender_match_repository import TenderMatchRepository
+    from services.match_services.tender_match_repository_facade import TenderMatchRepositoryFacade as TenderMatchRepository
 
 
 def fetch_match_summary_with_cache(

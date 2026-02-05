@@ -1,4 +1,10 @@
 """
+MODULE: modules.crm.info_panel
+RESPONSIBILITY: Display the right-side information panel.
+ALLOWED: PyQt5, typing, modules.styles.general_styles.
+FORBIDDEN: Complex business logic.
+ERRORS: None.
+
 Информационная панель (InfoPanel) для правой стороны интерфейса
 
 Отображает контекстную информацию, статистику, быстрые действия и уведомления.

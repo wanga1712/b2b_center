@@ -1,4 +1,12 @@
-"""Быстрая проверка состояния миграции"""
+"""
+MODULE: scripts.quick_check
+RESPONSIBILITY: Fast check of migration status.
+ALLOWED: psycopg2, os, dotenv.
+FORBIDDEN: None.
+ERRORS: None.
+
+Быстрая проверка состояния миграции
+"""
 import psycopg2
 import os
 from dotenv import load_dotenv

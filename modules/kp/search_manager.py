@@ -1,4 +1,10 @@
 """
+MODULE: modules.kp.search_manager
+RESPONSIBILITY: Product search orchestration with debounce.
+ALLOWED: PyQt5.QtCore (QTimer), typing, loguru, services.fuzzy_search.
+FORBIDDEN: Direct UI manipulation (uses callbacks).
+ERRORS: None.
+
 Менеджер поиска товаров с дебаунсингом и кэшированием
 """
 
@@ -74,6 +80,10 @@ class SearchManager:
             subcategory_id = params.get('subcategory_id')
             manufacturer_id = params.get('manufacturer_id')
             search_text = params.get('search_text')
+            
+            logger.debug(f"Выполнение поиска с параметрами: category_id={category_id}, "
+                        f"subcategory_id={subcategory_id}, manufacturer_id={manufacturer_id}, "
+                        f"search_text={search_text}")
             
             # Проверяем кэш
             cache_key = self._build_cache_key(category_id, subcategory_id, manufacturer_id, search_text)

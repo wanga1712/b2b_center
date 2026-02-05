@@ -1,4 +1,12 @@
-"""Модуль для определения типа реестра закупки."""
+"""
+MODULE: modules.bids.tender_registry_type
+RESPONSIBILITY: Determine registry type (44FZ/223FZ) from tender data.
+ALLOWED: typing.
+FORBIDDEN: External dependencies.
+ERRORS: None.
+
+Модуль для определения типа реестра закупки.
+"""
 
 from typing import Dict, Any
 

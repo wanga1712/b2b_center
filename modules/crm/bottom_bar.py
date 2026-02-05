@@ -1,4 +1,10 @@
 """
+MODULE: modules.crm.bottom_bar
+RESPONSIBILITY: Display the application bottom status bar.
+ALLOWED: PyQt5, loguru, modules.styles.general_styles.
+FORBIDDEN: Complex business logic.
+ERRORS: None.
+
 Нижняя панель (BottomBar) для ограничения приложения
 
 Отображает статус приложения, индикаторы загрузки и служебную информацию.

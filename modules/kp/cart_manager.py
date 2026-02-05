@@ -1,4 +1,10 @@
 """
+MODULE: modules.kp.cart_manager
+RESPONSIBILITY: Manage the commercial proposal cart UI and calculations.
+ALLOWED: PyQt5, typing, loguru, modules.kp.logic, modules.kp.formatters, modules.styles.*.
+FORBIDDEN: Database queries (should be in logic or passed in).
+ERRORS: None.
+
 Менеджер корзины коммерческого предложения
 """
 

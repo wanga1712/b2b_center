@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.document_downloader
+RESPONSIBILITY: Download documents from remote URLs.
+ALLOWED: requests, ThreadPoolExecutor, logging, services.document_search.document_selector.
+FORBIDDEN: Processing file content (except size check), database access.
+ERRORS: DocumentSearchError.
+
 Модуль для загрузки документов с сервера.
 
 Класс DocumentDownloader отвечает за:
@@ -10,9 +16,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
+import time
 
 import requests
 from loguru import logger
@@ -43,15 +50,19 @@ class DocumentDownloader:
         self,
         download_dir: Path,
         progress_callback: Optional[callable] = None,
+        timeout_calculator: Optional[Callable[[Optional[int], Optional[str]], None]] = None,
     ):
         """
         Args:
             download_dir: Директория для сохранения файлов
             progress_callback: Функция для обновления прогресса (stage, progress, detail)
+            timeout_calculator: Функция для расчета таймаута (file_size_bytes, file_name) -> None
+            Таймауты полностью убраны - файлы могут скачиваться сколь угодно долго
         """
         self.download_dir = Path(download_dir)
         self.download_dir.mkdir(parents=True, exist_ok=True)
         self.progress_callback = progress_callback
+        self.timeout_calculator = timeout_calculator
         self.http_session = requests.Session()
         self.http_session.headers.update(self.DEFAULT_HEADERS)
         self._active_downloads: List[Path] = []
@@ -63,6 +74,32 @@ class DocumentDownloader:
                 self.progress_callback(stage, progress, detail)
             except Exception as error:
                 logger.debug(f"Ошибка при обновлении прогресса: {error}")
+
+    def _calculate_timeout(
+        self,
+        file_size_bytes: Optional[int] = None,
+        file_name: Optional[str] = None,
+    ) -> Optional[Tuple[int, Optional[int]]]:
+        """
+        Вычисляет таймаут на основе размера файла и типа.
+        Таймауты полностью убраны - файлы могут скачиваться сколь угодно долго.
+        
+        Args:
+            file_size_bytes: Размер файла в байтах (если известен)
+            file_name: Имя файла (для определения типа и коэффициента запаса)
+            
+        Returns:
+            None - без таймаутов вообще
+        """
+        if self.timeout_calculator:
+            result = self.timeout_calculator(file_size_bytes, file_name)
+            # Если калькулятор вернул таймауты, но мы хотим их убрать
+            if result and result[1] is not None:
+                return None
+            return result
+        
+        # Полностью убираем таймауты
+        return None
 
     def download_document(
         self,
@@ -86,11 +123,28 @@ class DocumentDownloader:
         logger.info(f"Начинаю скачивание документа '{file_name}' по ссылке {url}")
 
         try:
-            timeout_config = (30, 600)  # 30 сек на подключение, 10 минут на чтение
+            # Пытаемся получить размер файла из document или через HEAD запрос
+            file_size_bytes = document.get("file_size")
+            if not file_size_bytes:
+                # Пробуем HEAD запрос для получения размера (без таймаута)
+                try:
+                    head_response = self.http_session.head(url, timeout=None, allow_redirects=True)
+                    content_length = head_response.headers.get('content-length')
+                    if content_length:
+                        file_size_bytes = int(content_length)
+                except Exception:
+                    pass  # Если HEAD не работает, продолжаем без размера
+            
+            # Вычисляем таймаут (теперь всегда None - без таймаутов)
+            timeout_config = self._calculate_timeout(file_size_bytes, file_name)
+            logger.debug(
+                f"Скачивание файла {file_name} без таймаутов"
+                + (f" (размер: {file_size_bytes / 1024 / 1024:.2f} MB)" if file_size_bytes else "")
+            )
             
             response = self.http_session.get(
                 url,
-                timeout=timeout_config,
+                timeout=timeout_config,  # None - без таймаутов
                 stream=True,
                 allow_redirects=True
             )

@@ -1,4 +1,10 @@
 """
+MODULE: modules.crm.sales_funnel.funnel_widget
+RESPONSIBILITY: Container widget for a specific pipeline (Kanban board + controls).
+ALLOWED: PyQt5, loguru, modules.styles.*, modules.crm.sales_funnel.*.
+FORBIDDEN: Heavy business logic.
+ERRORS: None.
+
 Виджет воронки продаж с канбан-доской
 """
 
@@ -66,13 +72,7 @@ class SalesFunnelWidget(QWidget):
             deals = self.deal_repo.get_deals(self.pipeline_type, self.user_id)
             logger.info(f"Загружено сделок: {len(deals)} для pipeline_type={self.pipeline_type.value}, user_id={self.user_id}")
             
-            # Синхронизируем данные сделок с реестром закупок
-            if self.sync_service:
-                for deal in deals:
-                    if deal.tender_id:
-                        self.sync_service.sync_deal_with_tender(deal)
-            
-            # Создаем канбан-доску
+            # Создаем канбан-доску ПЕРЕД синхронизацией
             if self.kanban_board:
                 self.layout().removeWidget(self.kanban_board)
                 self.kanban_board.deleteLater()
@@ -85,6 +85,16 @@ class SalesFunnelWidget(QWidget):
                 parent=self
             )
             self.layout().addWidget(self.kanban_board)
+            
+            # Синхронизируем данные сделок с реестром закупок ПОСЛЕ создания карточек
+            # Данные остаются в памяти и используются для отображения (кеширование)
+            if self.sync_service:
+                for deal in deals:
+                    if deal.tender_id:
+                        self.sync_service.sync_deal_with_tender(deal)
+                # Обновляем карточки после синхронизации, чтобы показать новые данные
+                if self.kanban_board and hasattr(self.kanban_board, 'refresh_cards'):
+                    self.kanban_board.refresh_cards()
             
         except Exception as e:
             logger.error(f"Ошибка при загрузке данных воронки: {e}")

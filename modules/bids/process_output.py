@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.process_output
+RESPONSIBILITY: Dialog and Thread for capturing and displaying external process output.
+ALLOWED: PyQt5, loguru, typing.
+FORBIDDEN: Business logic.
+ERRORS: None.
+
 Модуль для отображения вывода процессов обработки документов.
 """
 
@@ -124,6 +130,28 @@ class ProcessOutputDialog(QDialog):
     
     def on_process_finished(self, return_code: int):
         """Обработка завершения процесса"""
+        # #region agent log
+        import json
+        import time
+        log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "A",
+                    "location": "process_output.py:on_process_finished:entry",
+                    "message": "Процесс анализа завершен",
+                    "data": {
+                        "return_code": return_code,
+                        "has_callback": self._on_finished_callback is not None
+                    },
+                    "timestamp": int(time.time() * 1000)
+                }, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
+        
         if return_code == 0:
             self.append_output("\n[SUCCESS] Процесс успешно завершен.")
         else:
@@ -133,10 +161,71 @@ class ProcessOutputDialog(QDialog):
         
         # Уведомляем внешний код о завершении процесса (для сброса состояний)
         if self._on_finished_callback:
+            # #region agent log
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "A",
+                        "location": "process_output.py:on_process_finished:before_callback",
+                        "message": "Вызов callback после завершения анализа",
+                        "data": {"return_code": return_code},
+                        "timestamp": int(time.time() * 1000)
+                    }, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+            # #endregion
             try:
                 self._on_finished_callback(return_code)
+                # #region agent log
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "A",
+                            "location": "process_output.py:on_process_finished:after_callback",
+                            "message": "Callback выполнен успешно",
+                            "data": {"return_code": return_code},
+                            "timestamp": int(time.time() * 1000)
+                        }, ensure_ascii=False) + "\n")
+                except Exception:
+                    pass
+                # #endregion
             except Exception as callback_error:
                 logger.error(f"Ошибка в обработчике завершения процесса: {callback_error}")
+                # #region agent log
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "A",
+                            "location": "process_output.py:on_process_finished:callback_error",
+                            "message": "Ошибка в callback",
+                            "data": {"error": str(callback_error)},
+                            "timestamp": int(time.time() * 1000)
+                        }, ensure_ascii=False) + "\n")
+                except Exception:
+                    pass
+                # #endregion
+        else:
+            # #region agent log
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "A",
+                        "location": "process_output.py:on_process_finished:no_callback",
+                        "message": "Нет callback для обновления карточек",
+                        "data": {"return_code": return_code},
+                        "timestamp": int(time.time() * 1000)
+                    }, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+            # #endregion
     
     def closeEvent(self, event):
         """Обработка закрытия окна"""

@@ -1,4 +1,10 @@
 """
+MODULE: services.tender_repositories.user_okpd_repository
+RESPONSIBILITY: Manage user-specific OKPD codes.
+ALLOWED: typing, loguru, core.tender_database, psycopg2.extras.
+FORBIDDEN: Business logic outside DB operations.
+ERRORS: Database exceptions.
+
 Репозиторий для работы с ОКПД кодами пользователя.
 """
 

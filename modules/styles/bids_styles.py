@@ -1,4 +1,10 @@
 """
+MODULE: modules.styles.bids_styles
+RESPONSIBILITY: Specialized styles for bids modules.
+ALLOWED: modules.styles.general_styles.
+FORBIDDEN: Business logic.
+ERRORS: None.
+
 Специализированные стили для модулей заявок (bids).
 """
 

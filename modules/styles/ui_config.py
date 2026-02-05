@@ -1,4 +1,10 @@
 """
+MODULE: modules.styles.ui_config
+RESPONSIBILITY: Centralized UI Configuration (window sizes, dialog setups).
+ALLOWED: typing, PyQt5, modules.styles.general_styles.
+FORBIDDEN: Business logic.
+ERRORS: None.
+
 Централизованная конфигурация UI для PyQt5.
 
 Содержит функции для настройки окон, диалогов, размеров и расположения элементов.

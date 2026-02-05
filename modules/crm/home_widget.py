@@ -1,4 +1,10 @@
 """
+MODULE: modules.crm.home_widget
+RESPONSIBILITY: Main CRM dashboard navigation with folders.
+ALLOWED: PyQt5, loguru, modules.styles.*, modules.crm.*, modules.bids.*, modules.crm.sales_funnel.*.
+FORBIDDEN: Direct SQL queries (use repositories).
+ERRORS: None.
+
 Главный виджет раздела CRM
 
 Отображает папки с пиктограммами (как в "Мой компьютер") для навигации по подразделам CRM.
@@ -214,8 +220,8 @@ class CRMHomeWidget(QWidget):
                 self.sales_funnel_submenu.update_counts(counts_by_pipeline)
             
             logger.info(
-                "Обновлены счетчики воронок продаж: total=%s, participation=%s, "
-                "materials=%s, subcontracting=%s",
+                "Обновлены счетчики воронок продаж: total={}, participation={}, "
+                "materials={}, subcontracting={}",
                 total_count,
                 counts_by_pipeline.get(PipelineType.PARTICIPATION, 0),
                 counts_by_pipeline.get(PipelineType.MATERIALS_SUPPLY, 0),

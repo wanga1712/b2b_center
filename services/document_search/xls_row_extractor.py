@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.xls_row_extractor
+RESPONSIBILITY: Extract specific row data (quantity, cost) from .xls sheets.
+ALLOWED: xlrd, excel_utils, error_logger, logging.
+FORBIDDEN: Database access.
+ERRORS: None.
+
 Извлечение данных из строк .xls файлов.
 """
 

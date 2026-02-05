@@ -1,4 +1,10 @@
 """
+MODULE: services.archive_runner.archive_processor
+RESPONSIBILITY: Process individual archives, unzip, and register extracted files.
+ALLOWED: DocumentSelector, ArchiveExtractor, DocumentDownloader, logging, services.archive_runner.file_deduplicator.
+FORBIDDEN: Database interaction directly.
+ERRORS: None.
+
 Модуль для обработки архивов при подготовке документов.
 
 Содержит логику распаковки архивов и обработки извлеченных файлов.
@@ -48,19 +54,43 @@ class ArchiveProcessor:
     ) -> bool:
         """
         Обработка одного архива: распаковка и добавление файлов.
-        
-        Args:
-            archive_path: Путь к архиву
-            record: Запись с метаданными
-            documents: Список всех документов (для повторной загрузки)
-            tender_folder: Папка тендера
-            queue: Очередь для обработки
-            workbook_paths_dict: Словарь путей для дедупликации
-            workbook_paths_set: Множество путей
-            
-        Returns:
-            True если архив успешно обработан, False если ошибка
         """
+        # #region agent log
+        import json
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        log_path = os.path.join(project_root, ".cursor", "debug.log")
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "doc-processing-debug",
+                    "hypothesisId": "ARCHIVE_PROCESS_START",
+                    "location": "archive_processor.py:process_archive_path:start",
+                    "message": f"Начинаем обработку архива: {archive_path.name}",
+                    "data": {
+                        "archive_path": str(archive_path),
+                        "archive_exists": archive_path.exists(),
+                        "archive_size": archive_path.stat().st_size if archive_path.exists() else 0,
+                        "tender_folder": str(tender_folder)
+                    },
+                    "timestamp": int(time.time() * 1000)
+                }))
+        except Exception as e:
+            pass
+        # #endregion
+        
+        # Args:
+        #     archive_path: Путь к архиву
+        #     record: Запись с метаданными
+        #     documents: Список всех документов (для повторной загрузки)
+        #     tender_folder: Папка тендера
+        #     queue: Очередь для обработки
+        #     workbook_paths_dict: Словарь путей для дедупликации
+        #     workbook_paths_set: Множество путей
+        #     
+        # Returns:
+        #     True если архив успешно обработан, False если ошибка
         try:
             doc_meta = record.get("doc") or {}
             base_name, part_number = self.selector.split_archive_name(
@@ -74,7 +104,55 @@ class ArchiveProcessor:
                 return True
 
             target_dir = self._resolve_extract_dir(record, tender_folder, archive_path, base_name)
+
+            # #region agent log
+            import json
+            project_root = Path(__file__).parent.parent.parent
+            log_path = project_root / ".cursor" / "debug.log"
+
+            try:
+                with open(str(log_path), "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "extraction",
+                        "hypothesisId": "EXTRACTION",
+                        "location": "archive_processor.py:process_archive_path:before_extract",
+                        "message": "Перед распаковкой архива",
+                        "data": {
+                            "archive_name": archive_path.name,
+                            "archive_size": archive_path.stat().st_size if archive_path.exists() else 0,
+                            "target_dir": str(target_dir)
+                        },
+                        "timestamp": int(time.time() * 1000)
+                    }, ensure_ascii=False) + "\n")
+                    f.flush()
+            except Exception:
+                pass
+            # #endregion
+
             extracted_paths = self.extractor.extract_archive(archive_path, target_dir)
+
+            # #region agent log
+            try:
+                with open(str(log_path), "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "extraction",
+                        "hypothesisId": "EXTRACTION",
+                        "location": "archive_processor.py:process_archive_path:after_extract",
+                        "message": "После распаковки архива",
+                        "data": {
+                            "archive_name": archive_path.name,
+                            "extracted_paths_count": len(extracted_paths) if extracted_paths else 0,
+                            "extracted_paths_sample": [str(p)[-50:] for p in extracted_paths[:5]] if extracted_paths else []
+                        },
+                        "timestamp": int(time.time() * 1000)
+                    }, ensure_ascii=False) + "\n")
+                    f.flush()
+            except Exception:
+                pass
+            # #endregion
+
             if not extracted_paths:
                 logger.warning(
                     f"Архив {archive_path.name} не содержит поддерживаемых документов (Excel, Word, PDF)"

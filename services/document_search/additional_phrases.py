@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.additional_phrases
+RESPONSIBILITY: Provide additional search phrases/keywords for specific product categories.
+ALLOWED: loguru.
+FORBIDDEN: Database access, IO operations.
+ERRORS: None.
+
 Модуль для работы с дополнительными фразами для поиска.
 
 Содержит:

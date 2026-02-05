@@ -1,4 +1,10 @@
 """
+MODULE: modules.crm.sales_funnel.tender_to_funnel_service
+RESPONSIBILITY: Service to move tenders into the sales funnel (create initial deals).
+ALLOWED: typing, loguru, modules.crm.sales_funnel.models, modules.crm.sales_funnel.*_repository.
+FORBIDDEN: Direct UI interaction.
+ERRORS: None.
+
 Сервис для перемещения закупки в воронку продаж
 """
 

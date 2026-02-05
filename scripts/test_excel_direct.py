@@ -1,4 +1,11 @@
 # -*- coding: utf-8 -*-
+"""
+MODULE: scripts.test_excel_direct
+RESPONSIBILITY: Direct testing of Excel parsing on a specific folder.
+ALLOWED: sys, os, pathlib, services.document_search.excel_parser, services.document_search.file_format_detector, traceback.
+FORBIDDEN: None.
+ERRORS: None.
+"""
 import sys
 import os
 from pathlib import Path

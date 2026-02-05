@@ -1,8 +1,14 @@
 """
+MODULE: scripts.apply_tender_statuses_migration
+RESPONSIBILITY: Applying tender statuses migration (main script).
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv, pathlib, loguru, typing.
+FORBIDDEN: None.
+ERRORS: None.
+
 Скрипт для применения миграции статусов закупок
 
 Выполняет SQL миграцию для добавления системы статусов закупок,
-что позволит исключать "плохие" записи из поиска и ускорить запросы.
+чтобы исключать "плохие" записи из поиска и ускорить запросы.
 
 ⚠️ ВАЖНО: Данные НЕ удаляются! Скрипт только:
 - Создает таблицу статусов

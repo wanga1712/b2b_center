@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.pdf_processor
+RESPONSIBILITY: Handle PDF text extraction (text-based and scanned/OCR).
+ALLOWED: PyPDF2, pdfplumber, pytesseract, pdf2image, logging, file_lock_handler, core.exceptions, sys, warnings, gc, contextlib.
+FORBIDDEN: Direct database access.
+ERRORS: DocumentSearchError.
+
 Модуль для обработки PDF файлов.
 
 Поддерживает:
@@ -14,6 +20,7 @@ import io
 import os
 import warnings
 import sys
+import gc
 from contextlib import contextmanager
 
 from loguru import logger
@@ -266,35 +273,84 @@ class PDFProcessor:
             import pytesseract
             from PIL import Image
             import pdf2image
+            import PyPDF2
             
             logger.info(f"Начинаем OCR обработку PDF {file_path.name}...")
             
-            # Конвертируем PDF в изображения
+            # Получаем количество страниц для постраничной обработки
+            total_pages = None
             try:
-                images = pdf2image.convert_from_path(str(file_path))
-            except Exception as convert_error:
-                raise DocumentSearchError(f"Не удалось конвертировать PDF в изображения: {convert_error}")
+                with open(str(file_path), 'rb') as pdf_file:
+                    pdf_reader = PyPDF2.PdfReader(pdf_file)
+                    total_pages = len(pdf_reader.pages)
+                    logger.debug(f"PDF {file_path.name} содержит {total_pages} страниц")
+            except Exception as page_count_error:
+                logger.warning(f"Не удалось определить количество страниц через PyPDF2: {page_count_error}, будем обрабатывать до ошибки")
+                # Если не удалось определить количество страниц, будем обрабатывать по одной до ошибки
             
-            if not images:
+            if total_pages is not None and total_pages == 0:
                 raise DocumentSearchError(f"PDF {file_path.name} не содержит страниц")
             
-            # Извлекаем текст с каждой страницы через OCR
+            # Обрабатываем страницы по одной, чтобы не загружать все в память
             text_parts = []
-            for page_num, image in enumerate(images, 1):
+            page_num = 1
+            max_pages = total_pages if total_pages is not None else 10000  # Ограничение на случай бесконечного цикла
+            
+            while page_num <= max_pages:
                 try:
-                    page_text = pytesseract.image_to_string(image, lang='rus+eng')
-                    if page_text.strip():
-                        text_parts.append(page_text)
-                        logger.debug(f"OCR страница {page_num}/{len(images)}: извлечено {len(page_text)} символов")
-                except Exception as ocr_error:
-                    logger.warning(f"Ошибка OCR на странице {page_num} в {file_path.name}: {ocr_error}")
-                    continue
+                    # Конвертируем только одну страницу за раз
+                    page_images = pdf2image.convert_from_path(
+                        str(file_path),
+                        first_page=page_num,
+                        last_page=page_num,
+                        dpi=300  # Можно настроить DPI для баланса качества/скорости
+                    )
+                    
+                    if not page_images:
+                        # Если количество страниц неизвестно, это может означать конец файла
+                        if total_pages is None:
+                            logger.debug(f"Страница {page_num} не найдена, завершаем обработку")
+                            break
+                        else:
+                            logger.warning(f"Страница {page_num} не была конвертирована в изображение")
+                            page_num += 1
+                            continue
+                    
+                    # Обрабатываем страницу через OCR
+                    image = page_images[0]
+                    try:
+                        page_text = pytesseract.image_to_string(image, lang='rus+eng')
+                        if page_text.strip():
+                            text_parts.append(page_text)
+                            page_info = f"{page_num}/{total_pages}" if total_pages else f"{page_num}"
+                            logger.debug(f"OCR страница {page_info}: извлечено {len(page_text)} символов")
+                    except Exception as ocr_error:
+                        logger.warning(f"Ошибка OCR на странице {page_num} в {file_path.name}: {ocr_error}")
+                    
+                    # Освобождаем память после обработки страницы
+                    del image
+                    del page_images
+                    gc.collect()
+                    
+                    page_num += 1
+                    
+                except Exception as page_error:
+                    # Если количество страниц неизвестно и получили ошибку - это может быть конец файла
+                    if total_pages is None:
+                        logger.debug(f"Ошибка при обработке страницы {page_num}, вероятно конец файла: {page_error}")
+                        break
+                    else:
+                        logger.warning(f"Ошибка при обработке страницы {page_num} в {file_path.name}: {page_error}")
+                        page_num += 1
+                        continue
             
             if not text_parts:
                 raise DocumentSearchError(f"OCR не смог извлечь текст из PDF {file_path.name}")
             
+            processed_pages = len(text_parts)
             full_text = "\n".join(text_parts)
-            logger.info(f"OCR завершен для PDF {file_path.name}: {len(full_text)} символов из {len(images)} страниц")
+            pages_info = f"{processed_pages} страниц" if total_pages is None else f"{processed_pages}/{total_pages} страниц"
+            logger.info(f"OCR завершен для PDF {file_path.name}: {len(full_text)} символов из {pages_info}")
             return full_text
             
         except ImportError as import_error:

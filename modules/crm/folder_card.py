@@ -1,4 +1,10 @@
 """
+MODULE: modules.crm.folder_card
+RESPONSIBILITY: Display a clickable folder card widget.
+ALLOWED: PyQt5, loguru, pathlib, modules.styles.general_styles.
+FORBIDDEN: Database queries, business logic.
+ERRORS: None.
+
 Карточка папки для отображения в grid layout
 
 Используется в главном меню CRM и подменю.

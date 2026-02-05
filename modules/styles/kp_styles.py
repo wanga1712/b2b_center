@@ -1,4 +1,10 @@
 """
+MODULE: modules.styles.kp_styles
+RESPONSIBILITY: Specialized styles for KP module.
+ALLOWED: modules.styles.general_styles.
+FORBIDDEN: Business logic.
+ERRORS: None.
+
 Специализированные стили для интерфейса коммерческих предложений (KP).
 """
 

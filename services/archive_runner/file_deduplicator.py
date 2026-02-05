@@ -1,4 +1,10 @@
 """
+MODULE: services.archive_runner.file_deduplicator
+RESPONSIBILITY: Deduplicate files based on name and size.
+ALLOWED: pathlib, logging.
+FORBIDDEN: IO operations beyond stat().
+ERRORS: None.
+
 Модуль для дедупликации файлов при подготовке к обработке.
 
 Содержит логику добавления файлов в словарь с проверкой дубликатов.

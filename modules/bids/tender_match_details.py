@@ -1,4 +1,12 @@
-"""Модуль для создания деталей совпадений в карточке закупки."""
+"""
+MODULE: modules.bids.tender_match_details
+RESPONSIBILITY: Create detailed match view components for tender cards.
+ALLOWED: PyQt5, modules.styles.*, modules.bids.tender_match_card_colors, modules.bids.tender_match_details_groups.
+FORBIDDEN: Business logic.
+ERRORS: None.
+
+Модуль для создания деталей совпадений в карточке закупки.
+"""
 
 from typing import Any, Dict, List, Optional
 from PyQt5.QtWidgets import QFrame, QVBoxLayout, QLabel, QWidget

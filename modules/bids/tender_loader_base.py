@@ -1,17 +1,23 @@
 """
+MODULE: modules.bids.tender_loader_base
+RESPONSIBILITY: Base class for tender loaders with common filter logic.
+ALLOWED: typing, loguru, services.tender_repository.
+FORBIDDEN: UI interaction (pure logic).
+ERRORS: None.
+
 Базовые методы для загрузки тендеров.
 """
 
 from typing import Optional, Dict, Any, List
 from loguru import logger
 
-from services.tender_repository import TenderRepository
+from services.tender_services.tender_repository_facade import TenderRepositoryFacade
 
 
 class TenderLoaderBase:
     """Базовый класс с общими методами для загрузки тендеров"""
     
-    def __init__(self, tender_repo: TenderRepository):
+    def __init__(self, tender_repo: TenderRepositoryFacade):
         """
         Инициализация базового загрузчика
         

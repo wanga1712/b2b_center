@@ -1,4 +1,12 @@
-"""Контроллер поведения виджета отчета по командировке."""
+"""
+MODULE: modules.travel_report.controller
+RESPONSIBILITY: UI logic and event handling for Travel Report.
+ALLOWED: typing, datetime, pathlib, PyQt5, config.settings, modules.travel_report.*.
+FORBIDDEN: Direct UI creation (should only handle logic/events).
+ERRORS: None.
+
+Контроллер поведения виджета отчета по командировке.
+"""
 
 from __future__ import annotations
 

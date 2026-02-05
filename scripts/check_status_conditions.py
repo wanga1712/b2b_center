@@ -1,4 +1,12 @@
-"""Проверка условий для установки статусов"""
+"""
+MODULE: scripts.check_status_conditions
+RESPONSIBILITY: Verifying conditions for setting different statuses.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv, traceback.
+FORBIDDEN: None.
+ERRORS: None.
+
+Проверка условий для установки статусов
+"""
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os

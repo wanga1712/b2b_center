@@ -1,4 +1,12 @@
-"""Проверка условий для статуса 'Разыграна'"""
+"""
+MODULE: scripts.check_won_status_conditions
+RESPONSIBILITY: Checking conditions specific to 'Won' status.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv, traceback.
+FORBIDDEN: None.
+ERRORS: None.
+
+Проверка условий для статуса 'Разыграна'
+"""
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os

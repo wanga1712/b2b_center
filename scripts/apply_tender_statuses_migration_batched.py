@@ -1,4 +1,10 @@
 """
+MODULE: scripts.apply_tender_statuses_migration_batched
+RESPONSIBILITY: Applying tender statuses migration in batches to prevent locking.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv, pathlib, loguru, time.
+FORBIDDEN: None.
+ERRORS: None.
+
 Скрипт для применения миграции статусов закупок с батчами
 
 Выполняет SQL миграцию по частям (батчами) для отслеживания прогресса

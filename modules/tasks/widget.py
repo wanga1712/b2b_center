@@ -1,3 +1,10 @@
+"""
+MODULE: modules.tasks.widget
+RESPONSIBILITY: Tasks UI widget (entry point for Travel Report).
+ALLOWED: PyQt5, modules.styles.general_styles, modules.travel_report.widget.
+FORBIDDEN: Heavy business logic.
+ERRORS: None.
+"""
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QWidget,

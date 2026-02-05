@@ -1,4 +1,10 @@
 """
+MODULE: modules.kp.widget
+RESPONSIBILITY: Main widget orchestrating KP creation.
+ALLOWED: PyQt5, typing, loguru, modules.kp.*, services.*, core.database, config.settings.
+FORBIDDEN: Direct SQL queries (use repositories).
+ERRORS: None.
+
 Виджет для создания и управления коммерческими предложениями
 
 Виджет предоставляет интерфейс для:
@@ -49,7 +55,7 @@ from modules.kp.logic import (
 )
 
 # Импортируем репозиторий и менеджер БД
-from services.product_repository import ProductRepository
+from services.product_services.product_repository_facade import ProductRepositoryFacade
 from services.fuzzy_search import fuzzy_search_products, combine_search_results
 from core.database import DatabaseManager
 from config.settings import config
@@ -97,7 +103,7 @@ class KPWidget(QWidget):
         
         # Создаем репозиторий для работы с товарами
         if self.db_manager:
-            self.product_repo = ProductRepository(self.db_manager)
+            self.product_repo = ProductRepositoryFacade(self.db_manager)
         else:
             self.product_repo = None
         
@@ -208,11 +214,24 @@ class KPWidget(QWidget):
 
     def load_all_products(self):
         """Загрузка всех товаров при инициализации"""
+        logger.debug("Вызов load_all_products()")
         if not hasattr(self, 'search_manager'):
+            logger.warning("search_manager не инициализирован")
             return
         
+        if not self.search_manager:
+            logger.warning("search_manager существует, но None")
+            return
+            
+        logger.debug("Выполнение поиска всех товаров через search_manager")
         # Используем search_manager для загрузки всех товаров
-        self.search_manager.search()
+        # Явно указываем None для всех фильтров чтобы получить все товары
+        self.search_manager.search(
+            category_id=None,
+            subcategory_id=None, 
+            manufacturer_id=None,
+            search_text=None
+        )
 
     def _on_category_changed(self):
         """Обработка изменения категории - загрузка подкатегорий"""

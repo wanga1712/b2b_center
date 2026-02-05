@@ -1,16 +1,24 @@
-"""Виджет карточки закупки (сокращенный и полный вид)"""
+"""
+MODULE: modules.bids.tender_card
+RESPONSIBILITY: Display individual tender card with summary and actions.
+ALLOWED: PyQt5, typing, loguru, modules.styles.bids_styles, modules.bids.tender_detail_dialog, modules.bids.tender_card_ui.
+FORBIDDEN: Direct database modification (except via Managers/Services).
+ERRORS: None.
+
+Виджет карточки закупки (сокращенный и полный вид)
+"""
 
 from PyQt5.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QWidget
 from PyQt5.QtCore import Qt, pyqtSignal
 from typing import Dict, Any, Optional, TYPE_CHECKING, List
 import traceback
 from loguru import logger
-from modules.styles.bids_styles import apply_tender_card_style, apply_tender_checkbox_style
+from modules.styles.bids_styles import apply_tender_checkbox_style
 from modules.bids.tender_detail_dialog import TenderDetailDialog
 
 if TYPE_CHECKING:
     from services.document_search_service import DocumentSearchService
-    from services.tender_match_repository import TenderMatchRepository
+    from services.match_services.tender_match_repository_facade import TenderMatchRepositoryFacade as TenderMatchRepository
 
 
 class TenderCard(QFrame):
@@ -47,19 +55,25 @@ class TenderCard(QFrame):
         """Инициализация интерфейса карточки"""
         from modules.bids.tender_card_ui import (
             create_header_layout, create_info_layout,
-            create_price_date_layout, create_meta_layout, create_okpd_label
+            create_price_date_layout, create_meta_layout, create_okpd_label,
+            create_actions_layout
         )
         
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
         layout.setContentsMargins(12, 12, 12, 12)
-        apply_tender_card_style(self)
+        
+        # Применяем Salesforce стиль с цветовой полоской
+        self._apply_salesforce_card_style()
         
         self.select_checkbox = QCheckBox()
         apply_tender_checkbox_style(self.select_checkbox)
         self.select_checkbox.stateChanged.connect(self._on_selection_changed)
         
-        layout.addLayout(create_header_layout(self.tender_data, self.select_checkbox))
+        # Получаем match_summary для передачи в header
+        match_summary = self._fetch_match_summary()
+        
+        layout.addLayout(create_header_layout(self.tender_data, self.select_checkbox, match_summary))
         layout.addLayout(create_info_layout(self.tender_data))
         layout.addLayout(create_price_date_layout(self.tender_data))
         
@@ -71,11 +85,66 @@ class TenderCard(QFrame):
         if okpd_label:
             layout.addWidget(okpd_label)
         
-        from modules.bids.tender_card_status_preview import add_status_and_preview
-        self.status_container, self.matches_preview = add_status_and_preview(
-            layout, self._create_status_badges, self._create_matches_preview
+        # Добавляем секцию действий (Salesforce style)
+        actions_layout = create_actions_layout(
+            self.tender_data,
+            match_summary,
+            on_convert_clicked=self._on_convert_to_deal
         )
+        layout.addLayout(actions_layout)
+        
+        # Старые статус и превью (опционально, можно убрать если дублируется)
+        # from modules.bids.tender_card_status_preview import add_status_and_preview
+        # self.status_container, self.matches_preview = add_status_and_preview(
+        #     layout, self._create_status_badges, self._create_matches_preview
+        # )
+        
         self.setMouseTracking(True)
+    
+    def _apply_salesforce_card_style(self):
+        """Применить Salesforce стиль с цветовой полоской."""
+        from modules.bids.tender_card_salesforce_styles import get_priority_color, get_salesforce_card_style
+        
+        match_summary = self._fetch_match_summary()
+        priority_color = get_priority_color(self.tender_data, match_summary)
+        style = get_salesforce_card_style(priority_color)
+        self.setStyleSheet(style)
+    
+    def _on_convert_to_deal(self):
+        """Обработчик конвертации закупки в сделку."""
+        from PyQt5.QtWidgets import QMessageBox
+        
+        result = QMessageBox.question(
+            self,
+            "Конвертация в сделку",
+            f"Конвертировать закупку '{self.tender_data.get('auction_name', 'Без названия')[:50]}...' в сделку?\n\n"
+            "Будет создана новая сделка в воронке продаж.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if result == QMessageBox.Yes:
+            try:
+                self._convert_tender_to_deal()
+                QMessageBox.information(
+                    self,
+                    "Успех",
+                    "Закупка успешно конвертирована в сделку!"
+                )
+            except Exception as e:
+                logger.error(f"Ошибка при конвертации закупки в сделку: {e}", exc_info=True)
+                QMessageBox.critical(
+                    self,
+                    "Ошибка",
+                    f"Не удалось конвертировать закупку в сделку:\n{str(e)}"
+                )
+    
+    def _convert_tender_to_deal(self):
+        """Конвертация закупки в сделку (создание записи в sales_deals)."""
+        # TODO: Реализовать логику создания сделки из закупки
+        # Нужно создать запись в таблице sales_deals с данными из закупки
+        logger.info(f"Конвертация закупки ID {self.tender_data.get('id')} в сделку")
+        raise NotImplementedError("Конвертация в сделку будет реализована в следующей итерации")
     
     def mouseDoubleClickEvent(self, event):
         """Обработка двойного клика - открытие полной информации"""
@@ -152,10 +221,68 @@ class TenderCard(QFrame):
     def _fetch_match_summary(self) -> Optional[Dict[str, Any]]:
         from modules.bids.tender_card_data_fetch import fetch_match_summary_with_cache
         tender_id = self.tender_data.get('id')
+        # #region agent log
+        import json
+        import time
+        log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "B",
+                    "location": "tender_card.py:_fetch_match_summary:entry",
+                    "message": "Получение match_summary",
+                    "data": {
+                        "tender_id": tender_id,
+                        "has_cache": self._match_summary_cache is not None
+                    },
+                    "timestamp": int(time.time() * 1000)
+                }, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
         if self._match_summary_cache is None:
             self._match_summary_cache = fetch_match_summary_with_cache(
                 self.tender_match_repository, tender_id, self._registry_type, None
             )
+            # #region agent log
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "B",
+                        "location": "tender_card.py:_fetch_match_summary:loaded_from_db",
+                        "message": "Данные загружены из БД",
+                        "data": {
+                            "tender_id": tender_id,
+                            "match_count": self._match_summary_cache.get('match_count') if self._match_summary_cache else None
+                        },
+                        "timestamp": int(time.time() * 1000)
+                    }, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+            # #endregion
+        else:
+            # #region agent log
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "B",
+                        "location": "tender_card.py:_fetch_match_summary:using_cache",
+                        "message": "Используется кэш (данные могут быть устаревшими)",
+                        "data": {
+                            "tender_id": tender_id,
+                            "match_count": self._match_summary_cache.get('match_count') if self._match_summary_cache else None
+                        },
+                        "timestamp": int(time.time() * 1000)
+                    }, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+            # #endregion
         return self._match_summary_cache
     
     def _fetch_match_details(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -171,8 +298,48 @@ class TenderCard(QFrame):
         )
     
     def update_status(self):
+        # #region agent log
+        import json
+        import time
+        log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
+        tender_id = self.tender_data.get('id')
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "D",
+                    "location": "tender_card.py:update_status:entry",
+                    "message": "Обновление статуса карточки",
+                    "data": {
+                        "tender_id": tender_id,
+                        "cache_before": self._match_summary_cache is not None
+                    },
+                    "timestamp": int(time.time() * 1000)
+                }, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
         from modules.bids.tender_card_update import update_card_status
         update_card_status(self, self._create_status_badges, self._create_matches_preview)
+        # #region agent log
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "D",
+                    "location": "tender_card.py:update_status:after",
+                    "message": "Статус карточки обновлен (но кэш не очищен)",
+                    "data": {
+                        "tender_id": tender_id,
+                        "cache_after": self._match_summary_cache is not None
+                    },
+                    "timestamp": int(time.time() * 1000)
+                }, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
     
     def _on_selection_changed(self, state: int):
         self.is_selected = (state == Qt.Checked)

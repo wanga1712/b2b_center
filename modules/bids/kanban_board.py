@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.kanban_board
+RESPONSIBILITY: Kanban board UI for managing bids.
+ALLOWED: PyQt5, loguru, modules.styles, modules.bids.bid_card.
+FORBIDDEN: SQL queries.
+ERRORS: None.
+
 Канбан-доска для управления закупками
 
 Реализует функциональность drag-and-drop для перемещения карточек

@@ -1,4 +1,12 @@
-"""Проверка правильности статуса 'Разыграна'"""
+"""
+MODULE: scripts.verify_won_status
+RESPONSIBILITY: Verifying the correctness of the 'Won' status.
+ALLOWED: psycopg2, psycopg2.extras, os, dotenv.
+FORBIDDEN: None.
+ERRORS: None.
+
+Проверка правильности статуса 'Разыграна'
+"""
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os

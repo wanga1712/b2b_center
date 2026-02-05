@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.document_search_progress_dialog
+RESPONSIBILITY: Progress dialog for document search.
+ALLOWED: PyQt5, loguru, modules.styles.
+FORBIDDEN: Heavy data processing.
+ERRORS: None.
+
 Диалоговое окно с прогресс-баром для отображения процесса поиска по документации
 """
 

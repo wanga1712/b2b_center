@@ -1,4 +1,10 @@
 """
+MODULE: services.tender_repositories.stop_words_repository
+RESPONSIBILITY: Manage user stop words in DB.
+ALLOWED: typing, loguru, core.tender_database, psycopg2.extras.
+FORBIDDEN: Business logic outside DB operations.
+ERRORS: Database exceptions.
+
 Репозиторий для работы со стоп-словами пользователя.
 """
 

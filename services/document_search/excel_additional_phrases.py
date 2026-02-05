@@ -1,11 +1,17 @@
 """
+MODULE: services.document_search.excel_additional_phrases
+RESPONSIBILITY: Search for additional phrases specifically in Excel files.
+ALLOWED: ExcelParser, additional_phrases, logging.
+FORBIDDEN: Parsing logic (use ExcelParser).
+ERRORS: None.
+
 Модуль для поиска дополнительных фраз в Excel файлах.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
@@ -16,6 +22,7 @@ from services.document_search.additional_phrases import get_additional_search_ph
 def search_additional_phrases_in_excel(
     file_path: Path,
     excel_parser: ExcelParser,
+    custom_phrases: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Поиск дополнительных фраз в Excel файлах.
@@ -23,11 +30,15 @@ def search_additional_phrases_in_excel(
     Args:
         file_path: Путь к Excel файлу
         excel_parser: Парсер Excel файлов
+        custom_phrases: Пользовательские фразы для поиска (объединяются с дополнительными)
         
     Returns:
         Список найденных совпадений с дополнительными фразами
     """
-    phrases = get_additional_search_phrases()
+    if custom_phrases:
+        phrases = custom_phrases
+    else:
+        phrases = get_additional_search_phrases()
     if not phrases:
         return []
     

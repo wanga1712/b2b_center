@@ -1,4 +1,10 @@
 """
+MODULE: scripts.apply_crm_deal_extensions
+RESPONSIBILITY: Applying CRM deal extensions migration.
+ALLOWED: os, sys, pathlib, psycopg2, dotenv, loguru.
+FORBIDDEN: None.
+ERRORS: None.
+
 Применение миграции add_crm_deal_extensions.sql к БД tender_monitor.
 
 Скрипт использует .env (переменные TENDER_MONITOR_DB_*) — те же, что и приложение.

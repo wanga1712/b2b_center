@@ -1,4 +1,10 @@
 """
+MODULE: modules.bids.tender_card_update
+RESPONSIBILITY: Helper for updating tender card UI state.
+ALLOWED: PyQt5, loguru.
+FORBIDDEN: Direct DB interaction.
+ERRORS: None.
+
 Модуль для обновления статуса карточки закупки.
 """
 

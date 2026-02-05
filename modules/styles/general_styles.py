@@ -1,4 +1,10 @@
 """
+MODULE: modules.styles.general_styles
+RESPONSIBILITY: Global app styles and scaling.
+ALLOWED: loguru, modules.styles.scaling, config.settings.
+FORBIDDEN: UI Widgets (circular imports).
+ERRORS: None.
+
 Единые стили для всего приложения B2B AutoDesk с глобальным масштабированием
 """
 from loguru import logger
@@ -55,6 +61,7 @@ COLORS = {
     'primary': '#2066B0',  # Bitrix24 Primary Blue
     'primary_dark': '#1A5490',  # Bitrix24 Dark Blue (для hover состояний)
     'secondary': '#F5F5F5',  # Bitrix24 Light Gray Background
+    'background': '#F5F5F5',  # Фон для контейнеров/скролла (ранее отсутствовал)
     'white': '#FFFFFF',
     'text_dark': '#535C69',  # Bitrix24 Dark Text
     'text_light': '#828282',  # Bitrix24 Light Text

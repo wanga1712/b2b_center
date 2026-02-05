@@ -1,4 +1,10 @@
 """
+MODULE: services.error_logger
+RESPONSIBILITY: Specialized logging for file processing errors.
+ALLOWED: pathlib, datetime, loguru.
+FORBIDDEN: Business logic, DB operations.
+ERRORS: None.
+
 Модуль для логирования ошибок обработки файлов в отдельный файл.
 
 Сохраняет ошибки при:

@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.product_loader
+RESPONSIBILITY: Load product names from the database for matching.
+ALLOWED: core.database, logging.
+FORBIDDEN: Business logic processing (only loading).
+ERRORS: None.
+
 Модуль для загрузки списка товаров из БД.
 """
 

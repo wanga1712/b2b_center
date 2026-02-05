@@ -1,4 +1,10 @@
 """
+MODULE: services.archive_runner.match_executor
+RESPONSIBILITY: Execute multi-threaded search matching on files.
+ALLOWED: MatchFinder, ThreadPoolExecutor, logging, json, time.
+FORBIDDEN: Database connection creation (passed in).
+ERRORS: None.
+
 Модуль для параллельного поиска совпадений в Excel файлах.
 """
 
@@ -31,15 +37,47 @@ class MatchExecutor:
         self._get_avg_time = get_avg_time_func
         self.batch_delay = max(0.0, batch_delay)
 
-    def run(self, workbook_paths: List[Path]) -> List[Dict[str, Any]]:
-        """Возвращает список лучших совпадений по каждому товару."""
+    def run(self, workbook_paths: List[Path]) -> Dict[str, Any]:
+        """
+        Обрабатывает файлы и возвращает совпадения и информацию о проблемных файлах.
+        
+        Returns:
+            Dict с ключами:
+            - "matches": List[Dict] - список лучших совпадений по каждому товару
+            - "failed_files": List[Dict] - список проблемных файлов с ошибками
+                Каждый элемент: {"path": str, "error": str, "file_size_mb": float}
+        """
+        # #region agent log
+        import json
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        log_path = os.path.join(project_root, ".cursor", "debug.log")
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "doc-processing-debug",
+                    "hypothesisId": "MATCH_EXECUTOR_START",
+                    "location": "match_executor.py:run:start",
+                    "message": "Начинаем match_executor.run",
+                    "data": {
+                        "workbook_paths_count": len(workbook_paths),
+                        "sample_paths": [str(p)[-50:] for p in workbook_paths[:3]] if workbook_paths else []
+                    },
+                    "timestamp": int(time.time() * 1000)
+                }))
+        except Exception as e:
+            pass
+        # #endregion
+
         matches: Dict[str, Dict[str, Any]] = {}
+        failed_files: List[Dict[str, Any]] = []  # Список проблемных файлов
         unique_paths = list({Path(p).resolve() for p in workbook_paths})
         total_files = len(unique_paths)
         duplicates_removed = len(workbook_paths) - total_files
 
         if total_files == 0:
-            return []
+            return {"matches": [], "failed_files": []}
 
         if duplicates_removed > 0:
             logger.warning(
@@ -60,6 +98,7 @@ class MatchExecutor:
             thread_match_finder = MatchFinder(
                 self.base_match_finder.product_names,
                 stop_phrases=getattr(self.base_match_finder, "stop_phrases", None),
+                user_search_phrases=getattr(self.base_match_finder, "user_search_phrases", None),
             )
             try:
                 # Определяем тип файла
@@ -123,6 +162,26 @@ class MatchExecutor:
             
             logger.info(f"📦 Партия {batch_number}: обработка файлов {batch_start + 1}-{batch_end} из {total_files}")
             
+            # #region agent log
+            import json
+            import os
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            log_path = os.path.join(project_root, ".cursor", "debug.log")
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "sessionId": "debug-session",
+                        "runId": "transaction-debug",
+                        "hypothesisId": "MATCH_EXECUTOR_IDLE",
+                        "location": "match_executor.py:run:thread_pool_start",
+                        "message": "Запуск ThreadPoolExecutor для обработки файлов",
+                        "data": {"workers": workers, "batch_size": len(batch_paths)},
+                        "timestamp": int(__import__('time').time() * 1000)
+                    }) + "\n")
+            except Exception:
+                pass
+            # #endregion
+            
             with ThreadPoolExecutor(max_workers=workers) as executor:
                 future_to_path = {
                     executor.submit(process_file, workbook_path): workbook_path
@@ -158,30 +217,44 @@ class MatchExecutor:
                         try:
                             _, file_matches, error, elapsed_time = future.result(timeout=300)
                         except FutureTimeoutError:
+                            error_msg = "Таймаут обработки (превышено 5 минут)"
                             logger.error(
                                 f"⏱️ Таймаут обработки файла {workbook_path.name} (превышено 5 минут), пропускаем"
                             )
                             get_error_logger().log_search_error(
                                 file_path=workbook_path,
-                                error_message="Таймаут обработки (превышено 5 минут)",
+                                error_message=error_msg,
                                 file_size_mb=file_size_mb,
                                 processing_time=300.0,
                             )
+                            # Сохраняем информацию о проблемном файле
+                            failed_files.append({
+                                "path": str(workbook_path),
+                                "error": error_msg,
+                                "file_size_mb": file_size_mb,
+                            })
                             failed_count += 1
                             continue
                         
                         total_elapsed_time += elapsed_time
 
                         if error:
+                            error_msg = str(error)
                             logger.error(
-                                f"Ошибка при поиске по файлу {workbook_path.name} (размер {file_size_mb:.2f} МБ, время {elapsed_time:.1f} сек): {error}"
+                                f"Ошибка при поиске по файлу {workbook_path.name} (размер {file_size_mb:.2f} МБ, время {elapsed_time:.1f} сек): {error_msg}"
                             )
                             get_error_logger().log_search_error(
                                 file_path=workbook_path,
-                                error_message=str(error),
+                                error_message=error_msg,
                                 file_size_mb=file_size_mb,
                                 processing_time=elapsed_time,
                             )
+                            # Сохраняем информацию о проблемном файле
+                            failed_files.append({
+                                "path": str(workbook_path),
+                                "error": error_msg,
+                                "file_size_mb": file_size_mb,
+                            })
                             failed_count += 1
                         else:
                             if elapsed_time > 120:
@@ -229,8 +302,19 @@ class MatchExecutor:
                             )
 
                     except Exception as error:
+                        error_msg = str(error)
                         failed_count += 1
-                        logger.error(f"Ошибка при обработке файла {workbook_path.name}: {error}")
+                        logger.error(f"Ошибка при обработке файла {workbook_path.name}: {error_msg}")
+                        # Сохраняем информацию о проблемном файле
+                        try:
+                            file_size_mb = workbook_path.stat().st_size / (1024 * 1024) if workbook_path.exists() else 0
+                        except OSError:
+                            file_size_mb = 0
+                        failed_files.append({
+                            "path": str(workbook_path),
+                            "error": error_msg,
+                            "file_size_mb": file_size_mb,
+                        })
                         continue
             
             # Пауза между батчами файлов для охлаждения процессора
@@ -242,7 +326,45 @@ class MatchExecutor:
         logger.info(
             f"Обработка файлов завершена: успешно {processed_count - failed_count}/{total_files}, ошибок {failed_count}, уникальных совпадений {len(matches)}"
         )
-        return list(matches.values())
+        if failed_files:
+            logger.warning(f"⚠️ Обнаружено {len(failed_files)} проблемных файлов, которые не удалось обработать")
+        
+        # #region agent log
+        import json
+        import time as time_module
+        import os
+        # Используем относительный путь (Path уже импортирован глобально)
+        project_root = Path(__file__).parent.parent.parent
+        log_path = project_root / ".cursor" / "debug.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(str(log_path), "a", encoding="utf-8") as f:
+                f.flush()
+                os.fsync(f.fileno())
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "B",
+                    "location": "match_executor.py:run:return",
+                    "message": "MatchExecutor завершил работу",
+                    "data": {
+                        "total_files": total_files,
+                        "processed_count": processed_count,
+                        "failed_count": failed_count,
+                        "matches_count": len(matches),
+                        "failed_files_count": len(failed_files),
+                        "matches_sample": [{"product_name": m.get("product_name"), "score": m.get("score", 0)} for m in list(matches.values())[:5]]
+                    },
+                    "timestamp": int(time_module.time() * 1000)
+                }, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
+        
+        return {
+            "matches": list(matches.values()),
+            "failed_files": failed_files
+        }
 
     @staticmethod
     def _format_eta(seconds: float) -> str:

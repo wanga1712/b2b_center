@@ -1,4 +1,10 @@
 """
+MODULE: services.tender_repositories.feeds.new_tenders_service
+RESPONSIBILITY: Service for fetching new tenders (44FZ/223FZ).
+ALLOWED: datetime, typing, loguru, psycopg2.extras, core.tender_database, services.tender_repositories.
+FORBIDDEN: Hardcoded SQL literals (use query builder).
+ERRORS: Database exceptions.
+
 Сервис загрузки новых тендеров 44ФЗ и 223ФЗ.
 """
 
@@ -124,6 +130,33 @@ class NewTendersService(BaseFeedService):
 
         # Логируем SQL запрос для отладки
         logger.debug(f"SQL запрос для новых торгов {registry_type}:\n{query}\nПараметры: {params}")
+        
+        # #region agent log
+        import json
+        import time
+        log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "B",
+                    "location": "services/tender_repositories/feeds/new_tenders_service.py:_build_new_query:after_filters",
+                    "message": "SQL запрос для новых торгов после применения фильтров",
+                    "data": {
+                        "registry_type": registry_type,
+                        "okpd_ids_count": len(okpd_ids),
+                        "region_id": filters.region_id,
+                        "stop_words_count": len(filters.stop_words) if filters.stop_words else 0,
+                        "limit": filters.limit,
+                        "query_length": len(query),
+                        "params_count": len(params)
+                    },
+                    "timestamp": int(time.time() * 1000)
+                }, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
 
         return query, params
 
@@ -172,6 +205,32 @@ class NewTendersService(BaseFeedService):
         
         # Логируем SQL запрос для отладки
         logger.debug(f"SQL запрос COUNT для новых торгов {registry_type}:\n{query}\nПараметры: {params}")
+        
+        # #region agent log
+        import json
+        import time
+        log_path = r"c:\Users\wangr\PycharmProjects\pythonProject89\.cursor\debug.log"
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "C",
+                    "location": "services/tender_repositories/feeds/new_tenders_service.py:_build_new_count_query:after_filters",
+                    "message": "SQL запрос COUNT для новых торгов после применения фильтров",
+                    "data": {
+                        "registry_type": registry_type,
+                        "okpd_ids_count": len(okpd_ids),
+                        "region_id": filters.region_id,
+                        "stop_words_count": len(filters.stop_words) if filters.stop_words else 0,
+                        "query_length": len(query),
+                        "params_count": len(params)
+                    },
+                    "timestamp": int(time.time() * 1000)
+                }, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
         
         return query, params
 

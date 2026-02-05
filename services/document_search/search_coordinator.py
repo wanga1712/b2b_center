@@ -1,4 +1,10 @@
 """
+MODULE: services.document_search.search_coordinator
+RESPONSIBILITY: Coordinate the entire document search process (directory prep, downloading, processing).
+ALLOWED: document_selector, document_downloader, archive_extractor, document_downloader_coordinator, workbook_preparator, match_aggregator, helpers.archive_cleanup, logging, shutil.
+FORBIDDEN: Direct lower-level parsing logic.
+ERRORS: None.
+
 Модуль для координации процесса поиска документов.
 """
 
